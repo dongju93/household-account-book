@@ -1,0 +1,6 @@
+-- seed.sql
+-- Per-user starter categories are created automatically by the handle_new_user()
+-- signup trigger (migration 0004), so there is nothing global to seed here.
+--
+-- This file exists for `supabase db reset` (local dev). Add any shared reference
+-- data below if needed in the future. Intentionally left empty otherwise.
