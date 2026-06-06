@@ -73,10 +73,25 @@ export async function updateRecurring(
   if (syncError) throw syncError
 }
 
-export async function setRecurringActive(id: string, isActive: boolean): Promise<void> {
+export async function setRecurringActive(
+  id: string,
+  ledgerId: string,
+  isActive: boolean,
+): Promise<void> {
   const { error } = await supabase
     .from('recurring_items')
     .update({ is_active: isActive })
     .eq('id', id)
   if (error) throw error
+
+  // When disabling, purge materialized transactions from the current month
+  // forward so the ledger reflects the deactivation immediately. Past months
+  // are left untouched to preserve historical integrity.
+  if (!isActive) {
+    const { error: purgeError } = await supabase.rpc('purge_recurring_forward', {
+      p_ledger: ledgerId,
+      p_recurring_id: id,
+    })
+    if (purgeError) throw purgeError
+  }
 }

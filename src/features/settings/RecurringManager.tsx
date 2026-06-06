@@ -31,7 +31,7 @@ export function RecurringManager({ ledgerId, canEdit }: { ledgerId: string; canE
   async function toggle(item: RecurringItem, on: boolean) {
     try {
       setActionError(null)
-      await setRecurringActive(item.id, on)
+      await setRecurringActive(item.id, ledgerId, on)
       reload()
       refresh()
     } catch (err) {
