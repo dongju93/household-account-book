@@ -11,7 +11,9 @@ export function SummaryCards({ summary }: { summary: MonthSummary }) {
     <div className="flex flex-col gap-3">
       <div className="rounded-[16px] border border-line bg-paper px-4 py-4">
         <div className="text-xs font-semibold text-ink2">이번 달 남는 돈 (수지)</div>
-        <div className={'tnum mt-1 text-[30px] font-extrabold ' + (balance >= 0 ? 'text-ok' : 'text-danger')}>
+        <div
+          className={`tnum mt-1 text-[30px] font-extrabold ${balance >= 0 ? 'text-ok' : 'text-danger'}`}
+        >
           {balance >= 0 ? '+' : '-'}₩{new Intl.NumberFormat('ko-KR').format(Math.abs(balance))}
         </div>
         <div className="mt-1 text-[11px] text-ink3">수입 − 지출 − 저축 − 투자</div>
@@ -27,7 +29,17 @@ export function SummaryCards({ summary }: { summary: MonthSummary }) {
   )
 }
 
-function StatCell({ label, amount, pct, tone }: { label: string; amount: number; pct: number; tone: Tone }) {
+function StatCell({
+  label,
+  amount,
+  pct,
+  tone,
+}: {
+  label: string
+  amount: number
+  pct: number
+  tone: Tone
+}) {
   return (
     <div className="rounded-[12px] border border-line bg-paper px-3 py-2.5">
       <div className="mb-1 text-[11.5px] font-semibold text-ink2">{label}</div>

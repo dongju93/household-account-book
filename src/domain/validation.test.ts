@@ -88,14 +88,18 @@ describe('validateTransactionInput', () => {
 
 describe('validateCategoryInput budget/goal gating', () => {
   it('allows a budget only on 지출', () => {
-    expect(validateCategoryInput({ name: '식비', type: 'expense', budgetAmount: '500,000' }).ok).toBe(true)
+    expect(
+      validateCategoryInput({ name: '식비', type: 'expense', budgetAmount: '500,000' }).ok,
+    ).toBe(true)
     const bad = validateCategoryInput({ name: '월급', type: 'income', budgetAmount: 100 })
     expect(bad.ok).toBe(false)
     if (!bad.ok) expect(bad.errors.budgetAmount).toBeTruthy()
   })
 
   it('allows a goal only on 저축', () => {
-    expect(validateCategoryInput({ name: '비상금', type: 'saving', goalAmount: 500_000 }).ok).toBe(true)
+    expect(validateCategoryInput({ name: '비상금', type: 'saving', goalAmount: 500_000 }).ok).toBe(
+      true,
+    )
     const bad = validateCategoryInput({ name: '주식', type: 'investment', goalAmount: 100 })
     expect(bad.ok).toBe(false)
     if (!bad.ok) expect(bad.errors.goalAmount).toBeTruthy()
@@ -130,7 +134,15 @@ describe('validateRecurringInput', () => {
 
   it('rejects an end month earlier than the start month', () => {
     const r = validateRecurringInput(
-      { name: 'x', type: 'saving', categoryId: 's', amount: 1000, startMonth: '2026-06', endMonth: '2026-01', dayOfMonth: 1 },
+      {
+        name: 'x',
+        type: 'saving',
+        categoryId: 's',
+        amount: 1000,
+        startMonth: '2026-06',
+        endMonth: '2026-01',
+        dayOfMonth: 1,
+      },
       savingCat,
     )
     expect(r.ok).toBe(false)
@@ -139,7 +151,14 @@ describe('validateRecurringInput', () => {
 
   it('rejects a day_of_month outside 1..31 and a type mismatch', () => {
     const r = validateRecurringInput(
-      { name: 'x', type: 'income', categoryId: 's', amount: 1000, startMonth: '2026-06', dayOfMonth: 32 },
+      {
+        name: 'x',
+        type: 'income',
+        categoryId: 's',
+        amount: 1000,
+        startMonth: '2026-06',
+        dayOfMonth: 32,
+      },
       savingCat,
     )
     expect(r.ok).toBe(false)

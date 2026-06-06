@@ -9,7 +9,9 @@ export interface MonthlyTrendPoint extends MonthSummary {
  * Per-month summaries for the 통계 trend charts. Crucially this REUSES
  * computeMonthSummary so reports and the dashboard can never diverge (spec §8).
  */
-export function monthlyTrend(txnsByMonth: ReadonlyMap<string, readonly TxnLike[]>): MonthlyTrendPoint[] {
+export function monthlyTrend(
+  txnsByMonth: ReadonlyMap<string, readonly TxnLike[]>,
+): MonthlyTrendPoint[] {
   return [...txnsByMonth.keys()]
     .sort()
     .map((month) => ({ month, ...computeMonthSummary(txnsByMonth.get(month) ?? []) }))

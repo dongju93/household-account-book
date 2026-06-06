@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { FUND_TYPES, fundTypeLabel } from '../../domain/fundType'
-import type { FundType } from '../../domain/fundType'
-import type { Category, Transaction } from '../../domain/types'
-import { validateTransactionInput } from '../../domain/validation'
 import { describeError } from '../../data/errors'
 import { createTransaction, updateTransaction } from '../../data/transactions'
+import type { FundType } from '../../domain/fundType'
+import { FUND_TYPES, fundTypeLabel } from '../../domain/fundType'
+import type { Category, Transaction } from '../../domain/types'
+import { validateTransactionInput } from '../../domain/validation'
 import { todayISO } from '../../lib/month'
 import { BottomSheet, Button, Chip, ErrorBanner, Segmented, Toggle } from '../../ui'
 
@@ -118,7 +118,9 @@ export function TransactionSheet({
 
         {/* category chips for the selected 구분 */}
         {typeCategories.length === 0 ? (
-          <p className="text-[12px] text-ink3">이 구분의 활성 카테고리가 없습니다. 설정에서 추가하세요.</p>
+          <p className="text-[12px] text-ink3">
+            이 구분의 활성 카테고리가 없습니다. 설정에서 추가하세요.
+          </p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {typeCategories.map((c) => (
@@ -128,7 +130,9 @@ export function TransactionSheet({
             ))}
           </div>
         )}
-        {errors.categoryId && <span className="-mt-1 text-[11px] text-danger">{errors.categoryId}</span>}
+        {errors.categoryId && (
+          <span className="-mt-1 text-[11px] text-danger">{errors.categoryId}</span>
+        )}
 
         <div className="flex gap-2">
           <label className="flex flex-1 flex-col gap-1">
@@ -176,7 +180,9 @@ export function TransactionSheet({
         )}
         {editing && onDelete && confirmingDelete && (
           <div className="flex flex-col gap-2 rounded-[12px] border border-danger/40 bg-danger/5 p-3">
-            <span className="text-center text-[13px] font-semibold text-ink">이 거래를 삭제할까요?</span>
+            <span className="text-center text-[13px] font-semibold text-ink">
+              이 거래를 삭제할까요?
+            </span>
             <div className="flex gap-2">
               <Button variant="ghost" onClick={() => setConfirmingDelete(false)}>
                 취소

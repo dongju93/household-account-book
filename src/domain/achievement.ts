@@ -1,11 +1,5 @@
 import type { FundType } from './fundType'
-import type {
-  AchievementStatus,
-  CategoryLike,
-  ExpenseStatus,
-  SavingStatus,
-  TxnLike,
-} from './types'
+import type { AchievementStatus, CategoryLike, ExpenseStatus, SavingStatus, TxnLike } from './types'
 
 /**
  * Achievement percentage, guarded against divide-by-zero (spec §6.3).

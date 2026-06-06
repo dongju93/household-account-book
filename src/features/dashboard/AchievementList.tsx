@@ -2,7 +2,7 @@ import type { AchievementRow } from '../../domain/achievement'
 import { fundTypeLabel } from '../../domain/fundType'
 import { won } from '../../lib/format'
 import { EmptyState, Progress, StatusPill } from '../../ui'
-import { statusTone } from '../../ui/StatusPill'
+import { statusTone } from '../../ui/statusTone'
 
 export function AchievementList({ rows }: { rows: AchievementRow[] }) {
   return (
@@ -23,7 +23,9 @@ export function AchievementList({ rows }: { rows: AchievementRow[] }) {
               <div className="mb-1.5 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <span className="text-[13px] font-bold">{r.name}</span>
-                  <span className="text-[10.5px] font-semibold text-ink3">{fundTypeLabel(r.type)}</span>
+                  <span className="text-[10.5px] font-semibold text-ink3">
+                    {fundTypeLabel(r.type)}
+                  </span>
                 </span>
                 <StatusPill status={r.status} />
               </div>

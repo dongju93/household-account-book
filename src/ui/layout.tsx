@@ -60,14 +60,42 @@ export function MonthNav({
 }) {
   return (
     <div className="flex items-center gap-1">
-      <button type="button" aria-label="이전 달" onClick={onPrev} className="flex h-7 w-7 items-center justify-center rounded-full text-ink2 hover:bg-fill1">
-        <svg width="8" height="12" viewBox="0 0 8 12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+      <button
+        type="button"
+        aria-label="이전 달"
+        onClick={onPrev}
+        className="flex h-7 w-7 items-center justify-center rounded-full text-ink2 hover:bg-fill1"
+      >
+        <svg
+          width="8"
+          height="12"
+          viewBox="0 0 8 12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        >
           <path d="M6 1L2 6l4 5" />
         </svg>
       </button>
-      <span className="tnum min-w-[68px] text-center text-base font-bold">{formatMonthLabel(value)}</span>
-      <button type="button" aria-label="다음 달" onClick={onNext} className="flex h-7 w-7 items-center justify-center rounded-full text-ink2 hover:bg-fill1">
-        <svg width="8" height="12" viewBox="0 0 8 12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+      <span className="tnum min-w-[68px] text-center text-base font-bold">
+        {formatMonthLabel(value)}
+      </span>
+      <button
+        type="button"
+        aria-label="다음 달"
+        onClick={onNext}
+        className="flex h-7 w-7 items-center justify-center rounded-full text-ink2 hover:bg-fill1"
+      >
+        <svg
+          width="8"
+          height="12"
+          viewBox="0 0 8 12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        >
           <path d="M2 1l4 5-4 5" />
         </svg>
       </button>
@@ -85,17 +113,42 @@ const TAB_ICON: Record<string, (active: boolean) => ReactNode> = {
     </svg>
   ),
   내역: (a) => (
-    <svg width="18" height="17" viewBox="0 0 18 17" fill="none" stroke={a ? '#39352f' : '#a8a299'} strokeWidth="1.7" strokeLinecap="round">
+    <svg
+      width="18"
+      height="17"
+      viewBox="0 0 18 17"
+      fill="none"
+      stroke={a ? '#39352f' : '#a8a299'}
+      strokeWidth="1.7"
+      strokeLinecap="round"
+    >
       <path d="M3 4h12M3 9h12M3 14h8" />
     </svg>
   ),
   통계: (a) => (
-    <svg width="18" height="17" viewBox="0 0 18 17" fill="none" stroke={a ? '#39352f' : '#a8a299'} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="18"
+      height="17"
+      viewBox="0 0 18 17"
+      fill="none"
+      stroke={a ? '#39352f' : '#a8a299'}
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M2 12l4-4 3 2 5-6" />
     </svg>
   ),
   설정: (a) => (
-    <svg width="18" height="17" viewBox="0 0 18 17" fill="none" stroke={a ? '#39352f' : '#a8a299'} strokeWidth="1.7" strokeLinecap="round">
+    <svg
+      width="18"
+      height="17"
+      viewBox="0 0 18 17"
+      fill="none"
+      stroke={a ? '#39352f' : '#a8a299'}
+      strokeWidth="1.7"
+      strokeLinecap="round"
+    >
       <path d="M2 5h7M13 5h3M2 13h3M9 13h7" />
       <circle cx="11" cy="5" r="2" fill="none" />
       <circle cx="7" cy="13" r="2" fill="none" />
@@ -109,7 +162,12 @@ function Tab({ to, label }: { to: string; label: string }) {
       {({ isActive }) => (
         <>
           {TAB_ICON[label](isActive)}
-          <span className={cn('text-[10.5px]', isActive ? 'font-bold text-ink' : 'font-medium text-ink3')}>
+          <span
+            className={cn(
+              'text-[10.5px]',
+              isActive ? 'font-bold text-ink' : 'font-medium text-ink3',
+            )}
+          >
             {label}
           </span>
         </>
@@ -130,7 +188,15 @@ export function TabBar({ onAdd }: { onAdd: () => void }) {
           onClick={onAdd}
           className="-mt-5 flex h-[46px] w-[46px] items-center justify-center rounded-full bg-ink shadow-lg shadow-ink/40"
         >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="#fff"
+            strokeWidth="2"
+            strokeLinecap="round"
+          >
             <path d="M10 4v12M4 10h12" />
           </svg>
         </button>

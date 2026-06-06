@@ -1,11 +1,11 @@
-import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { FUND_TYPES, fundTypeLabel, hasBudget, hasGoal } from '../../domain/fundType'
-import type { FundType } from '../../domain/fundType'
-import type { Category } from '../../domain/types'
-import { validateCategoryInput } from '../../domain/validation'
+import { useState } from 'react'
 import { createCategory, updateCategory } from '../../data/categories'
 import { describeError } from '../../data/errors'
+import type { FundType } from '../../domain/fundType'
+import { FUND_TYPES, fundTypeLabel, hasBudget, hasGoal } from '../../domain/fundType'
+import type { Category } from '../../domain/types'
+import { validateCategoryInput } from '../../domain/validation'
 import { BottomSheet, Button, ErrorBanner } from '../../ui'
 
 const TYPE_ITEMS = FUND_TYPES.map((t) => ({ value: t, label: fundTypeLabel(t) }))
@@ -26,7 +26,9 @@ export function CategoryFormSheet({
   const editing = category !== null
   const [type, setType] = useState<FundType>(category?.type ?? 'expense')
   const [name, setName] = useState(category?.name ?? '')
-  const [budget, setBudget] = useState(category?.budgetAmount != null ? String(category.budgetAmount) : '')
+  const [budget, setBudget] = useState(
+    category?.budgetAmount != null ? String(category.budgetAmount) : '',
+  )
   const [goal, setGoal] = useState(category?.goalAmount != null ? String(category.goalAmount) : '')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -119,7 +121,9 @@ export function CategoryFormSheet({
           </Field>
         )}
         {!hasBudget(type) && !hasGoal(type) && (
-          <p className="text-[12px] text-ink3">{fundTypeLabel(type)} 카테고리는 예산/목표가 없습니다.</p>
+          <p className="text-[12px] text-ink3">
+            {fundTypeLabel(type)} 카테고리는 예산/목표가 없습니다.
+          </p>
         )}
 
         {submitError && <ErrorBanner message={submitError} />}
@@ -132,15 +136,7 @@ export function CategoryFormSheet({
   )
 }
 
-function Field({
-  label,
-  error,
-  children,
-}: {
-  label: string
-  error?: string
-  children: ReactNode
-}) {
+function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
   return (
     <label className="flex flex-col gap-1">
       <span className="text-xs font-semibold text-ink2">{label}</span>

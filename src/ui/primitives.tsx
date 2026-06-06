@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { cn } from '../lib/cn'
-import { toneBg, toneTint, type Tone } from './tone'
+import { type Tone, toneBg, toneTint } from './tone'
 
 // ── Card ──────────────────────────────────────────────────────────────────────
 export function Card({
@@ -13,7 +13,9 @@ export function Card({
   pad?: string
 }) {
   return (
-    <div className={cn('rounded-[14px] border border-line bg-paper', pad, className)}>{children}</div>
+    <div className={cn('rounded-[14px] border border-line bg-paper', pad, className)}>
+      {children}
+    </div>
   )
 }
 
@@ -157,7 +159,13 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'ghost'
 }
 
-export function Button({ children, variant = 'primary', className, type = 'button', ...rest }: ButtonProps) {
+export function Button({
+  children,
+  variant = 'primary',
+  className,
+  type = 'button',
+  ...rest
+}: ButtonProps) {
   return (
     <button
       type={type}

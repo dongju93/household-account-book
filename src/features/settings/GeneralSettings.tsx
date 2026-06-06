@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useLedger } from '../../auth/LedgerContext'
+import { useLedger } from '../../auth/useLedger'
 import { Card } from '../../ui'
 
 // Currency is KRW-only for v1; custom month-start is deferred (spec §7.3), so we
@@ -21,7 +21,7 @@ export function GeneralSettings() {
 function Row({ label, value, last }: { label: string; value: ReactNode; last?: boolean }) {
   return (
     <div
-      className={'flex items-center justify-between px-3 py-2.5 ' + (last ? '' : 'border-b border-line-soft')}
+      className={`flex items-center justify-between px-3 py-2.5 ${last ? '' : 'border-b border-line-soft'}`}
     >
       <span className="text-sm font-semibold">{label}</span>
       <span className="text-[12.5px] text-ink2">{value}</span>

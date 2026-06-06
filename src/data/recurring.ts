@@ -41,7 +41,10 @@ function toRow(ledgerId: string, input: RecurringWrite) {
   }
 }
 
-export async function createRecurring(ledgerId: string, input: RecurringWrite): Promise<RecurringItem> {
+export async function createRecurring(
+  ledgerId: string,
+  input: RecurringWrite,
+): Promise<RecurringItem> {
   const { data, error } = await supabase
     .from('recurring_items')
     .insert(toRow(ledgerId, input))

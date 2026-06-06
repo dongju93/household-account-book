@@ -42,7 +42,9 @@ export async function listTransactions(
 
   if (cursor) {
     // strictly after the cursor in (txn_date desc, id desc) order
-    query = query.or(`txn_date.lt.${cursor.date},and(txn_date.eq.${cursor.date},id.lt.${cursor.id})`)
+    query = query.or(
+      `txn_date.lt.${cursor.date},and(txn_date.eq.${cursor.date},id.lt.${cursor.id})`,
+    )
   }
 
   query = query

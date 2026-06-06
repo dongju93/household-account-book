@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { LoadingState } from '../ui'
 
 // Default entry: route to /dashboard or /login based on auth state (spec §3).

@@ -1,6 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { LoadingState } from '../ui'
-import { useAuth } from './AuthContext'
+import { useAuth } from './useAuth'
 
 /**
  * Gate for authenticated routes. Distinguishes the three session states so a

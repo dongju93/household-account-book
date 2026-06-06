@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
-import { AuthContext, type AuthStatus, type AuthValue } from './AuthContext'
+import { AuthContext, type AuthStatus, type AuthValue } from './authContext'
 import { ProtectedRoute } from './ProtectedRoute'
 
 function renderWithStatus(status: AuthStatus) {

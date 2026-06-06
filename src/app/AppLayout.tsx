@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
-import { AppShell, TabBar } from '../ui'
 import { AddTransactionSheet } from '../features/transactions/AddTransactionSheet'
-import { useRefresh } from './refresh'
+import { AppShell, TabBar } from '../ui'
+import { useRefresh } from './useRefresh'
 
 // Authenticated shell: the page (via <Outlet/>) renders its own AppBar + body,
 // the persistent bottom TabBar lives here, and the add-transaction sheet is

@@ -11,13 +11,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { useRefresh } from '../../app/refresh'
 import { useAsyncData } from '../../app/useAsyncData'
-import { useLedger } from '../../auth/LedgerContext'
-import { categoryExpenseBreakdown, monthlyTrend } from '../../domain/reports'
-import type { Transaction } from '../../domain/types'
+import { useRefresh } from '../../app/useRefresh'
+import { useLedger } from '../../auth/useLedger'
 import { listCategories } from '../../data/categories'
 import { fetchTransactionsInRange, materializeMonths } from '../../data/summary'
+import { categoryExpenseBreakdown, monthlyTrend } from '../../domain/reports'
+import type { Transaction } from '../../domain/types'
 import { won } from '../../lib/format'
 import { addMonths, currentYearMonth, monthKey, monthRange } from '../../lib/month'
 import { AppBar, Card, Chip, EmptyState, ErrorBanner, LoadingState, ScreenBody } from '../../ui'
@@ -82,7 +82,12 @@ export function ReportsPage() {
         </div>
 
         {loading && <LoadingState />}
-        {error && <ErrorBanner message={error.message} variant={error.permission ? 'permission' : 'error'} />}
+        {error && (
+          <ErrorBanner
+            message={error.message}
+            variant={error.permission ? 'permission' : 'error'}
+          />
+        )}
 
         {!loading && !error && (
           <>
@@ -94,12 +99,41 @@ export function ReportsPage() {
               <ResponsiveContainer width="100%" height={190}>
                 <LineChart data={trendData} margin={{ top: 6, right: 8, left: 8, bottom: 0 }}>
                   <CartesianGrid stroke="#e9e5de" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#a8a299' }} axisLine={false} tickLine={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: '#a8a299' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
                   <Tooltip formatter={fmtWon} />
-                  <Line type="monotone" dataKey="수입" stroke={toneHex.neutral} strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="지출" stroke={toneHex.danger} strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="저축" stroke={toneHex.ok} strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="투자" stroke={toneHex.info} strokeWidth={2} dot={false} />
+                  <Line
+                    type="monotone"
+                    dataKey="수입"
+                    stroke={toneHex.neutral}
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="지출"
+                    stroke={toneHex.danger}
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="저축"
+                    stroke={toneHex.ok}
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="투자"
+                    stroke={toneHex.info}
+                    strokeWidth={2}
+                    dot={false}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </Card>
@@ -109,9 +143,20 @@ export function ReportsPage() {
               <ResponsiveContainer width="100%" height={170}>
                 <LineChart data={trendData} margin={{ top: 6, right: 8, left: 8, bottom: 0 }}>
                   <CartesianGrid stroke="#e9e5de" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#a8a299' }} axisLine={false} tickLine={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: '#a8a299' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
                   <Tooltip formatter={fmtWon} />
-                  <Line type="monotone" dataKey="수지" stroke={toneHex.ink} strokeWidth={2.4} dot={{ r: 2.5 }} />
+                  <Line
+                    type="monotone"
+                    dataKey="수지"
+                    stroke={toneHex.ink}
+                    strokeWidth={2.4}
+                    dot={{ r: 2.5 }}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </Card>

@@ -1,16 +1,12 @@
 import { useState } from 'react'
-import { useRefresh } from '../../app/refresh'
 import { useAsyncData } from '../../app/useAsyncData'
+import { useRefresh } from '../../app/useRefresh'
+import { listCategories, reorderCategories, setCategoryActive } from '../../data/categories'
+import { describeError } from '../../data/errors'
 import { fundTypeLabel } from '../../domain/fundType'
 import type { Category } from '../../domain/types'
-import {
-  listCategories,
-  reorderCategories,
-  setCategoryActive,
-} from '../../data/categories'
-import { describeError } from '../../data/errors'
 import { Card, EmptyState, ErrorBanner, Glyph, LoadingState, Pill, Toggle, Won } from '../../ui'
-import { glyphForCategory } from '../../ui/Glyph'
+import { glyphForCategory } from '../../ui/glyphForCategory'
 import { CategoryFormSheet } from './CategoryFormSheet'
 
 export function CategoryManager({ ledgerId, canManage }: { ledgerId: string; canManage: boolean }) {
@@ -72,11 +68,17 @@ export function CategoryManager({ ledgerId, canManage }: { ledgerId: string; can
         {loading && <LoadingState />}
         {error && (
           <div className="p-3">
-            <ErrorBanner message={error.message} variant={error.permission ? 'permission' : 'error'} />
+            <ErrorBanner
+              message={error.message}
+              variant={error.permission ? 'permission' : 'error'}
+            />
           </div>
         )}
         {!loading && !error && categories.length === 0 && (
-          <EmptyState title="카테고리가 없습니다" description="카테고리를 추가해 거래를 분류하세요." />
+          <EmptyState
+            title="카테고리가 없습니다"
+            description="카테고리를 추가해 거래를 분류하세요."
+          />
         )}
         {!loading &&
           !error &&
@@ -90,7 +92,13 @@ export function CategoryManager({ ledgerId, canManage }: { ledgerId: string; can
             >
               {canManage && (
                 <div className="flex flex-col">
-                  <button type="button" aria-label="위로" onClick={() => move(i, -1)} disabled={i === 0} className="text-ink3 disabled:opacity-30">
+                  <button
+                    type="button"
+                    aria-label="위로"
+                    onClick={() => move(i, -1)}
+                    disabled={i === 0}
+                    className="text-ink3 disabled:opacity-30"
+                  >
                     <Caret dir="up" />
                   </button>
                   <button
@@ -111,7 +119,12 @@ export function CategoryManager({ ledgerId, canManage }: { ledgerId: string; can
 
               <button
                 type="button"
-                onClick={() => canManage && (setEditing(c), setSheetOpen(true))}
+                onClick={() => {
+                  if (canManage) {
+                    setEditing(c)
+                    setSheetOpen(true)
+                  }
+                }}
                 className="flex flex-1 items-center gap-2 text-left"
               >
                 <span className="text-sm font-semibold">{c.name}</span>
@@ -160,7 +173,16 @@ function TargetLabel({ category }: { category: Category }) {
 
 function Caret({ dir }: { dir: 'up' | 'down' }) {
   return (
-    <svg width="14" height="10" viewBox="0 0 14 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="14"
+      height="10"
+      viewBox="0 0 14 10"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       {dir === 'up' ? <path d="M3 7l4-4 4 4" /> : <path d="M3 3l4 4 4-4" />}
     </svg>
   )

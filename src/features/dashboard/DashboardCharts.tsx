@@ -11,8 +11,7 @@ import {
   XAxis,
 } from 'recharts'
 import type { MonthSummary } from '../../domain/monthSummary'
-import type { MonthlyTrendPoint } from '../../domain/reports'
-import type { CategoryBreakdownRow } from '../../domain/reports'
+import type { CategoryBreakdownRow, MonthlyTrendPoint } from '../../domain/reports'
 import { won } from '../../lib/format'
 import { Card, EmptyState } from '../../ui'
 import { toneHex } from '../../ui/tone'
@@ -40,7 +39,10 @@ export function DashboardCharts({
     { name: '투자', value: summary.totalInvestment, fill: toneHex.info },
   ]
   const hasType = typeData.some((d) => d.value > 0)
-  const trendData = trend.map((t) => ({ label: `${Number(t.month.slice(5, 7))}월`, balance: t.balance }))
+  const trendData = trend.map((t) => ({
+    label: `${Number(t.month.slice(5, 7))}월`,
+    balance: t.balance,
+  }))
 
   return (
     <div className="flex flex-col gap-3">
@@ -51,7 +53,14 @@ export function DashboardCharts({
         ) : (
           <ResponsiveContainer width="100%" height={180}>
             <PieChart>
-              <Pie data={breakdown} dataKey="amount" nameKey="name" innerRadius={45} outerRadius={75} paddingAngle={2}>
+              <Pie
+                data={breakdown}
+                dataKey="amount"
+                nameKey="name"
+                innerRadius={45}
+                outerRadius={75}
+                paddingAngle={2}
+              >
                 {breakdown.map((row, i) => (
                   <Cell key={row.categoryId} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />
                 ))}
@@ -63,8 +72,14 @@ export function DashboardCharts({
         {breakdown.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
             {breakdown.slice(0, 6).map((row, i) => (
-              <span key={row.categoryId} className="flex items-center gap-1.5 text-[11px] text-ink2">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
+              <span
+                key={row.categoryId}
+                className="flex items-center gap-1.5 text-[11px] text-ink2"
+              >
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }}
+                />
                 {row.name} {row.pct}%
               </span>
             ))}
@@ -79,7 +94,12 @@ export function DashboardCharts({
         ) : (
           <ResponsiveContainer width="100%" height={170}>
             <BarChart data={typeData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#736d65' }} axisLine={false} tickLine={false} />
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 11, fill: '#736d65' }}
+                axisLine={false}
+                tickLine={false}
+              />
               <Tooltip formatter={tooltipWon} cursor={{ fill: '#efece6' }} />
               <Bar dataKey="value" radius={[5, 5, 0, 0]}>
                 {typeData.map((d) => (
@@ -95,9 +115,20 @@ export function DashboardCharts({
         <div className="mb-2 text-[13px] font-bold">월별 수지 추세</div>
         <ResponsiveContainer width="100%" height={170}>
           <LineChart data={trendData} margin={{ top: 6, right: 8, left: 8, bottom: 0 }}>
-            <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#a8a299' }} axisLine={false} tickLine={false} />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 10, fill: '#a8a299' }}
+              axisLine={false}
+              tickLine={false}
+            />
             <Tooltip formatter={tooltipWon} />
-            <Line type="monotone" dataKey="balance" stroke={toneHex.ink} strokeWidth={2.2} dot={{ r: 2.5 }} />
+            <Line
+              type="monotone"
+              dataKey="balance"
+              stroke={toneHex.ink}
+              strokeWidth={2.2}
+              dot={{ r: 2.5 }}
+            />
           </LineChart>
         </ResponsiveContainer>
       </Card>

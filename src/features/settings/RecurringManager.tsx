@@ -1,26 +1,23 @@
 import { useState } from 'react'
-import { useRefresh } from '../../app/refresh'
 import { useAsyncData } from '../../app/useAsyncData'
-import { fundTypeLabel } from '../../domain/fundType'
-import type { RecurringItem } from '../../domain/types'
+import { useRefresh } from '../../app/useRefresh'
 import { listCategories } from '../../data/categories'
 import { describeError } from '../../data/errors'
 import { listRecurring, setRecurringActive } from '../../data/recurring'
+import { fundTypeLabel } from '../../domain/fundType'
+import type { RecurringItem } from '../../domain/types'
 import { Card, EmptyState, ErrorBanner, LoadingState, Pill, Toggle, Won } from '../../ui'
 import { RecurringFormSheet } from './RecurringFormSheet'
 
 export function RecurringManager({ ledgerId, canEdit }: { ledgerId: string; canEdit: boolean }) {
   const { refresh } = useRefresh()
-  const { data, loading, error, reload } = useAsyncData(
-    async () => {
-      const [items, categories] = await Promise.all([
-        listRecurring(ledgerId),
-        listCategories(ledgerId, { activeOnly: true }),
-      ])
-      return { items, categories }
-    },
-    [ledgerId],
-  )
+  const { data, loading, error, reload } = useAsyncData(async () => {
+    const [items, categories] = await Promise.all([
+      listRecurring(ledgerId),
+      listCategories(ledgerId, { activeOnly: true }),
+    ])
+    return { items, categories }
+  }, [ledgerId])
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<RecurringItem | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -69,11 +66,17 @@ export function RecurringManager({ ledgerId, canEdit }: { ledgerId: string; canE
         {loading && <LoadingState />}
         {error && (
           <div className="p-3">
-            <ErrorBanner message={error.message} variant={error.permission ? 'permission' : 'error'} />
+            <ErrorBanner
+              message={error.message}
+              variant={error.permission ? 'permission' : 'error'}
+            />
           </div>
         )}
         {!loading && !error && items.length === 0 && (
-          <EmptyState title="고정 항목이 없습니다" description="매월 반복되는 수입·지출·저축·투자를 등록하세요." />
+          <EmptyState
+            title="고정 항목이 없습니다"
+            description="매월 반복되는 수입·지출·저축·투자를 등록하세요."
+          />
         )}
         {!loading &&
           !error &&
@@ -87,7 +90,12 @@ export function RecurringManager({ ledgerId, canEdit }: { ledgerId: string; canE
             >
               <button
                 type="button"
-                onClick={() => canEdit && (setEditing(item), setSheetOpen(true))}
+                onClick={() => {
+                  if (canEdit) {
+                    setEditing(item)
+                    setSheetOpen(true)
+                  }
+                }}
                 className="flex flex-1 flex-col items-start gap-1 text-left"
               >
                 <span className="flex items-center gap-2">

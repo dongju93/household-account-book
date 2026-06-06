@@ -1,6 +1,6 @@
 import { useActionState, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { useAuth } from '../../auth/AuthContext'
+import { useAuth } from '../../auth/useAuth'
 import { Button, ErrorBanner, Segmented } from '../../ui'
 
 type Mode = 'login' | 'signup'

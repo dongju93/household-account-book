@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
 import type { ReactNode } from 'react'
+import { useEffect } from 'react'
 
 /**
  * Modal sheet anchored to the bottom (the 거래 추가 pattern). Closes on backdrop
@@ -46,7 +46,15 @@ export function BottomSheet({
               aria-label="닫기"
               className="text-ink3 hover:text-ink2"
             >
-              <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              >
                 <path d="M3 3l10 10M13 3L3 13" />
               </svg>
             </button>

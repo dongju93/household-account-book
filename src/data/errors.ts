@@ -19,7 +19,10 @@ export function describeError(error: unknown): DescribedError {
 
   // type-match / check-constraint violations from the DB triggers
   if (code === '23514' || /check constraint|does not match category/i.test(raw)) {
-    return { message: '입력 값이 규칙에 맞지 않습니다. 구분과 카테고리를 확인하세요.', permission: false }
+    return {
+      message: '입력 값이 규칙에 맞지 않습니다. 구분과 카테고리를 확인하세요.',
+      permission: false,
+    }
   }
   if (code === '23505') {
     return { message: '이미 존재하는 값입니다.', permission: false }

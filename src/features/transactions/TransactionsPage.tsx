@@ -1,22 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { useRefresh } from '../../app/refresh'
 import { useAsyncData } from '../../app/useAsyncData'
-import { useLedger } from '../../auth/LedgerContext'
-import { FUND_TYPES, fundTypeLabel } from '../../domain/fundType'
-import type { FundType } from '../../domain/fundType'
-import type { Transaction } from '../../domain/types'
+import { useRefresh } from '../../app/useRefresh'
+import { useLedger } from '../../auth/useLedger'
 import { listCategories } from '../../data/categories'
-import { describeError, type DescribedError } from '../../data/errors'
+import { type DescribedError, describeError } from '../../data/errors'
 import { materializeMonth } from '../../data/summary'
 import { deleteTransaction, listTransactions, type TxnCursor } from '../../data/transactions'
+import type { FundType } from '../../domain/fundType'
+import { FUND_TYPES, fundTypeLabel } from '../../domain/fundType'
+import type { Transaction } from '../../domain/types'
 import { won } from '../../lib/format'
-import {
-  addMonths,
-  currentYearMonth,
-  formatDayHeader,
-  monthKey,
-  monthRange,
-} from '../../lib/month'
+import { addMonths, currentYearMonth, formatDayHeader, monthKey, monthRange } from '../../lib/month'
 import {
   AppBar,
   Button,
@@ -78,7 +72,6 @@ export function TransactionsPage() {
 
   const [rows, setRows] = useState<Transaction[]>([])
   const [cursor, setCursor] = useState<TxnCursor | null>(null)
-  const [listLoading, setListLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [listError, setListError] = useState<DescribedError | null>(null)
   const materializedRef = useRef<string | null>(null)
@@ -92,12 +85,22 @@ export function TransactionsPage() {
     search,
   })
 
-  // load the first page whenever the month, filters or data version change
-  useEffect(() => {
-    if (!ledgerId) return
-    let active = true
-    setListLoading(true)
+  const listKey = ledgerId
+    ? `${ledgerId}:${ym.year}:${ym.month}:${type}:${categoryId}:${search}:${version}`
+    : null
+  const [syncedKey, setSyncedKey] = useState(listKey)
+  const [fetchedKey, setFetchedKey] = useState<string | null>(null)
+  if (syncedKey !== listKey) {
+    setSyncedKey(listKey)
     setListError(null)
+  }
+  const listLoading = listKey !== null && fetchedKey !== listKey
+
+  // load the first page whenever the month, filters or data version change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: syncedKey captures all list inputs
+  useEffect(() => {
+    if (!ledgerId || syncedKey === null) return
+    let active = true
     ;(async () => {
       try {
         // materialize the month's recurring rows once per month+version
@@ -110,17 +113,19 @@ export function TransactionsPage() {
         if (!active) return
         setRows(page.rows)
         setCursor(page.nextCursor)
+        setListError(null)
+        setFetchedKey(syncedKey)
       } catch (err) {
-        if (active) setListError(describeError(err))
-      } finally {
-        if (active) setListLoading(false)
+        if (active) {
+          setListError(describeError(err))
+          setFetchedKey(syncedKey)
+        }
       }
     })()
     return () => {
       active = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ledgerId, ym.year, ym.month, type, categoryId, search, version])
+  }, [syncedKey])
 
   async function loadMore() {
     if (!ledgerId || !cursor) return
@@ -158,7 +163,13 @@ export function TransactionsPage() {
   return (
     <>
       <AppBar
-        left={<MonthNav value={ym} onPrev={() => setYm(addMonths(ym, -1))} onNext={() => setYm(addMonths(ym, 1))} />}
+        left={
+          <MonthNav
+            value={ym}
+            onPrev={() => setYm(addMonths(ym, -1))}
+            onNext={() => setYm(addMonths(ym, 1))}
+          />
+        }
         title="내역"
         center
       />
@@ -199,10 +210,16 @@ export function TransactionsPage() {
 
         {listLoading && <LoadingState />}
         {listError && (
-          <ErrorBanner message={listError.message} variant={listError.permission ? 'permission' : 'error'} />
+          <ErrorBanner
+            message={listError.message}
+            variant={listError.permission ? 'permission' : 'error'}
+          />
         )}
         {!listLoading && !listError && rows.length === 0 && (
-          <EmptyState title="거래가 없습니다" description="＋ 버튼으로 이 달의 거래를 추가해 보세요." />
+          <EmptyState
+            title="거래가 없습니다"
+            description="＋ 버튼으로 이 달의 거래를 추가해 보세요."
+          />
         )}
 
         {!listLoading &&

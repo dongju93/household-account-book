@@ -2,7 +2,7 @@ import type { Category, RecurringItem, Transaction } from '../domain/types'
 
 // DB rows come back snake_case; map them to the camelCase domain types once here.
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: PostgREST rows are loosely typed
 type Row = Record<string, any>
 
 export function mapCategory(r: Row): Category {

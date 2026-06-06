@@ -46,6 +46,8 @@ describe('categoryExpenseBreakdown', () => {
   })
 
   it('returns an empty array (no divide-by-zero) when there is no expense', () => {
-    expect(categoryExpenseBreakdown(cats, [{ type: 'income', amount: 100, categoryId: 'salary' }])).toEqual([])
+    expect(
+      categoryExpenseBreakdown(cats, [{ type: 'income', amount: 100, categoryId: 'salary' }]),
+    ).toEqual([])
   })
 })

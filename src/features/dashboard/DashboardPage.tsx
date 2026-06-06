@@ -1,13 +1,13 @@
 import { useState } from 'react'
-import { useRefresh } from '../../app/refresh'
 import { useAsyncData } from '../../app/useAsyncData'
-import { useLedger } from '../../auth/LedgerContext'
+import { useRefresh } from '../../app/useRefresh'
+import { useLedger } from '../../auth/useLedger'
+import { listCategories } from '../../data/categories'
+import { fetchTransactionsInRange, materializeMonths } from '../../data/summary'
 import { computeAchievements } from '../../domain/achievement'
 import { computeMonthSummary } from '../../domain/monthSummary'
 import { categoryExpenseBreakdown, monthlyTrend } from '../../domain/reports'
 import type { Transaction } from '../../domain/types'
-import { listCategories } from '../../data/categories'
-import { fetchTransactionsInRange, materializeMonths } from '../../data/summary'
 import { addMonths, currentYearMonth, monthKey, monthRange } from '../../lib/month'
 import { AppBar, ErrorBanner, LoadingState, MonthNav, ScreenBody } from '../../ui'
 import { AchievementList } from './AchievementList'
@@ -22,7 +22,9 @@ export function DashboardPage() {
   const [ym, setYm] = useState(currentYearMonth())
 
   // selected month + the preceding 5 months for the trend line
-  const months = Array.from({ length: TREND_MONTHS }, (_, i) => addMonths(ym, -(TREND_MONTHS - 1 - i)))
+  const months = Array.from({ length: TREND_MONTHS }, (_, i) =>
+    addMonths(ym, -(TREND_MONTHS - 1 - i)),
+  )
   const trendStart = monthRange(months[0].year, months[0].month).start
   const sel = monthRange(ym.year, ym.month)
 
@@ -55,11 +57,22 @@ export function DashboardPage() {
   return (
     <>
       <AppBar
-        left={<MonthNav value={ym} onPrev={() => setYm(addMonths(ym, -1))} onNext={() => setYm(addMonths(ym, 1))} />}
+        left={
+          <MonthNav
+            value={ym}
+            onPrev={() => setYm(addMonths(ym, -1))}
+            onNext={() => setYm(addMonths(ym, 1))}
+          />
+        }
       />
       <ScreenBody className="flex flex-col gap-3.5">
         {loading && <LoadingState />}
-        {error && <ErrorBanner message={error.message} variant={error.permission ? 'permission' : 'error'} />}
+        {error && (
+          <ErrorBanner
+            message={error.message}
+            variant={error.permission ? 'permission' : 'error'}
+          />
+        )}
         {!loading && !error && (
           <>
             <SummaryCards summary={summary} />

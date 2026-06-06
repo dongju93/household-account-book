@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  computeAchievements,
-  expenseStatus,
-  pctOf,
-  savingStatus,
-} from './achievement'
+import { computeAchievements, expenseStatus, pctOf, savingStatus } from './achievement'
 import type { CategoryLike, TxnLike } from './types'
 
 describe('pctOf (divide-by-zero guard)', () => {

@@ -1,6 +1,6 @@
 import type { Transaction } from '../../domain/types'
 import { Glyph, Won } from '../../ui'
-import { glyphForCategory } from '../../ui/Glyph'
+import { glyphForCategory } from '../../ui/glyphForCategory'
 
 export function TxnRow({
   txn,
@@ -38,7 +38,7 @@ export function TxnRow({
       <Won
         value={signedValue}
         withSign={isIncome}
-        className={'text-sm font-bold ' + (isIncome ? 'text-ok' : 'text-ink')}
+        className={`text-sm font-bold ${isIncome ? 'text-ok' : 'text-ink'}`}
       />
     </button>
   )

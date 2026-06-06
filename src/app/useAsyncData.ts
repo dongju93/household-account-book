@@ -1,11 +1,15 @@
-import { useEffect, useState } from 'react'
 import type { DependencyList } from 'react'
-import { describeError, type DescribedError } from '../data/errors'
+import { useEffect, useState } from 'react'
+import { type DescribedError, describeError } from '../data/errors'
 
 export interface AsyncState<T> {
   data: T | null
   loading: boolean
   error: DescribedError | null
+}
+
+function triggersEqual(a: unknown[], b: unknown[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i])
 }
 
 /**
@@ -17,26 +21,41 @@ export function useAsyncData<T>(
   loader: () => Promise<T>,
   deps: DependencyList,
 ): AsyncState<T> & { reload: () => void } {
-  const [state, setState] = useState<AsyncState<T>>({ data: null, loading: true, error: null })
   const [nonce, setNonce] = useState(0)
+  const trigger = [...deps, nonce]
 
+  const [snapshot, setSnapshot] = useState({ trigger, gen: 0 })
+  if (!triggersEqual(snapshot.trigger, trigger)) {
+    setSnapshot({ trigger, gen: snapshot.gen + 1 })
+  }
+
+  const [data, setData] = useState<T | null>(null)
+  const [error, setError] = useState<DescribedError | null>(null)
+  const [resolvedGen, setResolvedGen] = useState(-1)
+  const loading = resolvedGen < snapshot.gen
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: explicit trigger drives reloads
   useEffect(() => {
     let active = true
-    setState((prev) => ({ ...prev, loading: true, error: null }))
+    const gen = snapshot.gen
     loader().then(
-      (data) => {
-        if (active) setState({ data, loading: false, error: null })
+      (result) => {
+        if (!active) return
+        setData(result)
+        setError(null)
+        setResolvedGen(gen)
       },
       (err) => {
-        if (active) setState({ data: null, loading: false, error: describeError(err) })
+        if (!active) return
+        setData(null)
+        setError(describeError(err))
+        setResolvedGen(gen)
       },
     )
     return () => {
       active = false
     }
-    // loader identity is intentionally excluded; the explicit deps drive reloads.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, nonce])
+  }, [snapshot.gen])
 
-  return { ...state, reload: () => setNonce((n) => n + 1) }
+  return { data, loading, error, reload: () => setNonce((n) => n + 1) }
 }

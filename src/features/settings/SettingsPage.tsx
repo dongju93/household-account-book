@@ -1,5 +1,5 @@
-import { useAuth } from '../../auth/AuthContext'
-import { useLedger } from '../../auth/LedgerContext'
+import { useAuth } from '../../auth/useAuth'
+import { useLedger } from '../../auth/useLedger'
 import { AppBar, Button, ErrorBanner, LoadingState, ScreenBody } from '../../ui'
 import { CategoryManager } from './CategoryManager'
 import { GeneralSettings } from './GeneralSettings'

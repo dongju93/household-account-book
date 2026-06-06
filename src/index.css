@@ -1,6 +1,6 @@
 /* Fonts first (CSS requires @import before other rules), then Tailwind v4. */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
-@import 'tailwindcss';
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap");
+@import "tailwindcss";
 
 /*
   Design tokens lifted verbatim from the wireframe kit (wf-kit.jsx `WF`).
@@ -26,8 +26,8 @@
   --color-ok: #7d9377;
   --color-info: #7c87a2;
 
-  --font-sans: 'IBM Plex Sans KR', system-ui, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-sans: "IBM Plex Sans KR", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 
 html,

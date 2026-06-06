@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react'
+import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { AppLayout } from './app/AppLayout'
 import { RootRedirect } from './app/RootRedirect'
@@ -7,14 +7,18 @@ import { LoadingState } from './ui'
 
 // Route-level code splitting keeps the heavy chart pages (Recharts) out of the
 // initial bundle — they load only when their route is visited.
-const LoginPage = lazy(() => import('./features/auth/LoginPage').then((m) => ({ default: m.LoginPage })))
+const LoginPage = lazy(() =>
+  import('./features/auth/LoginPage').then((m) => ({ default: m.LoginPage })),
+)
 const DashboardPage = lazy(() =>
   import('./features/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })),
 )
 const TransactionsPage = lazy(() =>
   import('./features/transactions/TransactionsPage').then((m) => ({ default: m.TransactionsPage })),
 )
-const ReportsPage = lazy(() => import('./features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })))
+const ReportsPage = lazy(() =>
+  import('./features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })),
+)
 const SettingsPage = lazy(() =>
   import('./features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })),
 )

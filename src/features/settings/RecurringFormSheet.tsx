@@ -1,11 +1,11 @@
-import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { FUND_TYPES, fundTypeLabel } from '../../domain/fundType'
-import type { FundType } from '../../domain/fundType'
-import type { Category, RecurringItem } from '../../domain/types'
-import { validateRecurringInput } from '../../domain/validation'
+import { useState } from 'react'
 import { describeError } from '../../data/errors'
 import { createRecurring, updateRecurring } from '../../data/recurring'
+import type { FundType } from '../../domain/fundType'
+import { FUND_TYPES, fundTypeLabel } from '../../domain/fundType'
+import type { Category, RecurringItem } from '../../domain/types'
+import { validateRecurringInput } from '../../domain/validation'
 import { currentYearMonth, monthKey } from '../../lib/month'
 import { BottomSheet, Button, ErrorBanner } from '../../ui'
 
@@ -31,7 +31,9 @@ export function RecurringFormSheet({
   const [categoryId, setCategoryId] = useState<string>(item?.categoryId ?? '')
   const [name, setName] = useState(item?.name ?? '')
   const [amount, setAmount] = useState(item ? String(item.amount) : '')
-  const [startMonth, setStartMonth] = useState(item ? item.startMonth.slice(0, 7) : monthKey(nowYm.year, nowYm.month))
+  const [startMonth, setStartMonth] = useState(
+    item ? item.startMonth.slice(0, 7) : monthKey(nowYm.year, nowYm.month),
+  )
   const [endMonth, setEndMonth] = useState(item?.endMonth ? item.endMonth.slice(0, 7) : '')
   const [dayOfMonth, setDayOfMonth] = useState(item ? String(item.dayOfMonth) : '1')
   const [memo, setMemo] = useState(item?.memo ?? '')
@@ -44,7 +46,16 @@ export function RecurringFormSheet({
   async function handleSubmit() {
     const category = categories.find((c) => c.id === categoryId) ?? null
     const result = validateRecurringInput(
-      { name, type, categoryId: categoryId || null, amount, startMonth, endMonth: endMonth || null, dayOfMonth, memo },
+      {
+        name,
+        type,
+        categoryId: categoryId || null,
+        amount,
+        startMonth,
+        endMonth: endMonth || null,
+        dayOfMonth,
+        memo,
+      },
       category,
     )
     if (!result.ok) {
@@ -76,7 +87,11 @@ export function RecurringFormSheet({
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title={editing ? '고정 항목 수정' : '고정 항목 추가'}>
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title={editing ? '고정 항목 수정' : '고정 항목 추가'}
+    >
       <div className="flex max-h-[70vh] flex-col gap-3 overflow-y-auto">
         <Field label="구분">
           <div className="flex flex-wrap gap-1.5">
@@ -101,7 +116,9 @@ export function RecurringFormSheet({
 
         <Field label="카테고리" error={errors.categoryId}>
           {typeCategories.length === 0 ? (
-            <p className="text-[12px] text-ink3">이 구분의 활성 카테고리가 없습니다. 먼저 카테고리를 추가하세요.</p>
+            <p className="text-[12px] text-ink3">
+              이 구분의 활성 카테고리가 없습니다. 먼저 카테고리를 추가하세요.
+            </p>
           ) : (
             <select
               value={categoryId}
@@ -201,7 +218,7 @@ function Field({
   children: ReactNode
 }) {
   return (
-    <label className={'flex flex-col gap-1 ' + (className ?? '')}>
+    <label className={`flex flex-col gap-1 ${className ?? ''}`}>
       <span className="text-xs font-semibold text-ink2">{label}</span>
       {children}
       {error && <span className="text-[11px] text-danger">{error}</span>}
