@@ -1,0 +1,52 @@
+/* Fonts first (CSS requires @import before other rules), then Tailwind v4. */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+
+/*
+  Design tokens lifted verbatim from the wireframe kit (wf-kit.jsx `WF`).
+  Declaring them in @theme makes each a real Tailwind utility, e.g.
+  --color-ink -> text-ink / bg-ink / border-ink, --font-mono -> font-mono.
+*/
+@theme {
+  --color-paper: #ffffff;
+  --color-screen: #fbfaf8;
+  --color-bezel: #c9c4bc;
+  --color-ink: #39352f;
+  --color-ink2: #736d65;
+  --color-ink3: #a8a299;
+  --color-line: #dbd6cf;
+  --color-line-soft: #e9e5de;
+  --color-fill1: #efece6;
+  --color-fill2: #e4dfd8;
+  --color-fill3: #d6d0c7;
+
+  /* muted semantic accents — low chroma, varied hue (status colors) */
+  --color-danger: #b07360;
+  --color-warn: #b09863;
+  --color-ok: #7d9377;
+  --color-info: #7c87a2;
+
+  --font-sans: 'IBM Plex Sans KR', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-fill1);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular figures for every monetary number, matching the wireframe `Won`. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.2px;
+}
