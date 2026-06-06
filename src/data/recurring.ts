@@ -63,6 +63,14 @@ export async function updateRecurring(
   void ledger_id // ledger_id is immutable; excluded from the patch
   const { error } = await supabase.from('recurring_items').update(patch).eq('id', id)
   if (error) throw error
+
+  // Propagate the updated values to all materialized transactions for the current
+  // month and future months. Past months are left unchanged to preserve history.
+  const { error: syncError } = await supabase.rpc('sync_recurring_forward', {
+    p_ledger: ledgerId,
+    p_recurring_id: id,
+  })
+  if (syncError) throw syncError
 }
 
 export async function setRecurringActive(id: string, isActive: boolean): Promise<void> {
