@@ -59,7 +59,7 @@
 
 - **Frontend**: React 19, TypeScript, Vite, React Router, Tailwind CSS, Recharts
 - **Backend/Data**: Supabase Auth, Postgres, Row Level Security, RPC
-- **Tooling**: pnpm, Vitest, Testing Library, Biome
+- **Tooling**: pnpm, Vite+ (Vitest, Oxlint, Oxfmt), Testing Library
 
 ## 로컬 실행
 
