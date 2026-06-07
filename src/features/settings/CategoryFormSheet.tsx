@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useState } from 'react'
+
 import { createCategory, updateCategory } from '../../data/categories'
 import { describeError } from '../../data/errors'
 import type { FundType } from '../../domain/fundType'

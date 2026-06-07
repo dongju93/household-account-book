@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
+
 import { cn } from '../lib/cn'
 import type { YearMonth } from '../lib/month'
 import { formatMonthLabel } from '../lib/month'

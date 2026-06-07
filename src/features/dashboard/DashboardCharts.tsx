@@ -10,6 +10,7 @@ import {
   Tooltip,
   XAxis,
 } from 'recharts'
+
 import type { MonthSummary } from '../../domain/monthSummary'
 import type { CategoryBreakdownRow, MonthlyTrendPoint } from '../../domain/reports'
 import { won } from '../../lib/format'

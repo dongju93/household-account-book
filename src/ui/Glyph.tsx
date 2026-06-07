@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+
 import type { GlyphKey } from './glyphForCategory'
 
 const PATHS: Record<GlyphKey, ReactNode> = {

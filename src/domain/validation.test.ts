@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
+
 import { FUND_TYPES } from './fundType'
 import type { CategoryLike } from './types'
 import {

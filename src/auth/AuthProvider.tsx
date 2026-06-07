@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js'
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
+
 import { supabase } from '../lib/supabase'
 import { AuthContext, type AuthStatus, type AuthValue } from './authContext'
 
@@ -28,7 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true
 
     // Restore any persisted session before resolving the loading state.
-    supabase.auth.getSession().then(({ data }) => {
+    void supabase.auth.getSession().then(({ data }) => {
       if (!active) return
       setSession(data.session)
       setStatus(data.session ? 'authed' : 'anon')

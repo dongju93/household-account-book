@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
+
 import { addMonths, formatMonthLabel, monthKey, monthRange } from './month'
 
 describe('addMonths', () => {

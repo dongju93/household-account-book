@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
+
 import { AppLayout } from './app/AppLayout'
 import { RootRedirect } from './app/RootRedirect'
 import { ProtectedRoute } from './auth/ProtectedRoute'

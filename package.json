@@ -1,16 +1,16 @@
 {
   "name": "household-account-book",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "biome check .",
-    "format": "biome format --write .",
-    "preview": "vite preview",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "dev": "vp dev",
+    "build": "tsc -b && vp build",
+    "lint": "vp lint",
+    "format": "vp fmt",
+    "preview": "vp preview",
+    "test": "vp test",
+    "test:watch": "vp test watch"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",
@@ -21,7 +21,6 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
-    "@biomejs/biome": "^2.4.16",
     "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/vite": "^4.3.0",
     "@testing-library/jest-dom": "^6.9.1",
@@ -38,6 +37,7 @@
     "tailwindcss": "^4.3.0",
     "typescript": "~6.0.3",
     "vite": "^8.0.16",
+    "vite-plus": "^0.1.24",
     "vitest": "^4.1.8"
   }
 }
