@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
+
 import { computeMonthSummary } from './monthSummary'
 import type { TxnLike } from './types'
 

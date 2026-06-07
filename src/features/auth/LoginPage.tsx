@@ -1,5 +1,6 @@
 import { useActionState, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
+
 import { useAuth } from '../../auth/useAuth'
 import { Button, ErrorBanner, Segmented } from '../../ui'
 
@@ -17,14 +18,16 @@ export function LoginPage() {
 
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     async (_prev, formData) => {
-      const email = String(formData.get('email') ?? '').trim()
-      const password = String(formData.get('password') ?? '')
+      const emailField = formData.get('email')
+      const passwordField = formData.get('password')
+      const email = (typeof emailField === 'string' ? emailField : '').trim()
+      const password = typeof passwordField === 'string' ? passwordField : ''
       if (!email || !password) return { error: '이메일과 비밀번호를 입력하세요.' }
 
       if (mode === 'login') {
         const { error } = await signIn(email, password)
         if (error) return { error }
-        navigate('/dashboard', { replace: true })
+        void navigate('/dashboard', { replace: true })
         return {}
       }
 
@@ -33,7 +36,7 @@ export function LoginPage() {
       if (needsConfirmation) {
         return { message: '확인 메일을 보냈습니다. 메일 인증 후 로그인하세요.' }
       }
-      navigate('/dashboard', { replace: true })
+      void navigate('/dashboard', { replace: true })
       return {}
     },
     {},

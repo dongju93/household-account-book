@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+
 import { useAsyncData } from '../../app/useAsyncData'
 import { useRefresh } from '../../app/useRefresh'
 import { useLedger } from '../../auth/useLedger'
@@ -98,11 +99,12 @@ export function TransactionsPage() {
   const listLoading = listKey !== null && fetchedKey !== listKey
 
   // load the first page whenever the month, filters or data version change
-  // biome-ignore lint/correctness/useExhaustiveDependencies: syncedKey captures all list inputs
+  // syncedKey captures all list inputs
+  // oxlint-disable-next-line react/exhaustive-deps
   useEffect(() => {
     if (!ledgerId || syncedKey === null) return
     let active = true
-    ;(async () => {
+    void (async () => {
       try {
         // materialize the month's recurring rows once per month+version
         const matKey = `${monthKey(ym.year, ym.month)}:${version}`

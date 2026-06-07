@@ -1,5 +1,6 @@
 import type { DependencyList } from 'react'
 import { useEffect, useState } from 'react'
+
 import { type DescribedError, describeError } from '../data/errors'
 
 export interface AsyncState<T> {
@@ -34,7 +35,8 @@ export function useAsyncData<T>(
   const [resolvedGen, setResolvedGen] = useState(-1)
   const loading = resolvedGen < snapshot.gen
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: explicit trigger drives reloads
+  // explicit trigger drives reloads
+  // oxlint-disable-next-line react/exhaustive-deps
   useEffect(() => {
     let active = true
     const gen = snapshot.gen

@@ -1,4 +1,5 @@
 import { Navigate } from 'react-router-dom'
+
 import { useAuth } from '../auth/useAuth'
 import { LoadingState } from '../ui'
 
