@@ -1,6 +1,7 @@
 import type { FundType } from '../domain/fundType'
 import type { Category } from '../domain/types'
 import { supabase } from '../lib/supabase'
+import type { GlyphKey } from '../ui/glyphForCategory'
 import { mapCategory } from './mappers'
 
 export async function listCategories(
@@ -24,6 +25,7 @@ export async function listCategories(
 export interface CategoryWrite {
   name: string
   type: FundType
+  icon: GlyphKey | null
   budgetAmount: number | null
   goalAmount: number | null
   sortOrder?: number
@@ -36,6 +38,7 @@ export async function createCategory(ledgerId: string, input: CategoryWrite): Pr
       ledger_id: ledgerId,
       name: input.name,
       type: input.type,
+      icon: input.icon,
       budget_amount: input.budgetAmount,
       goal_amount: input.goalAmount,
       sort_order: input.sortOrder ?? 0,
@@ -48,6 +51,7 @@ export async function createCategory(ledgerId: string, input: CategoryWrite): Pr
 
 export interface CategoryPatch {
   name?: string
+  icon?: GlyphKey | null
   budgetAmount?: number | null
   goalAmount?: number | null
   sortOrder?: number
@@ -59,6 +63,7 @@ export async function updateCategory(id: string, patch: CategoryPatch): Promise<
   // 구분 would break existing transactions, so the UI blocks it (spec §7.1).
   const row: Record<string, unknown> = {}
   if (patch.name !== undefined) row.name = patch.name
+  if (patch.icon !== undefined) row.icon = patch.icon
   if (patch.budgetAmount !== undefined) row.budget_amount = patch.budgetAmount
   if (patch.goalAmount !== undefined) row.goal_amount = patch.goalAmount
   if (patch.sortOrder !== undefined) row.sort_order = patch.sortOrder

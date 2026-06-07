@@ -11,6 +11,7 @@ export function mapCategory(r: Row): Category {
     ledgerId: r.ledger_id,
     name: r.name,
     type: r.type,
+    icon: r.icon ?? null,
     budgetAmount: r.budget_amount,
     goalAmount: r.goal_amount,
     sortOrder: r.sort_order,

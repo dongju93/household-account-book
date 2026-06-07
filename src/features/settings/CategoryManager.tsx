@@ -114,7 +114,7 @@ export function CategoryManager({ ledgerId, canManage }: { ledgerId: string; can
               )}
 
               <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] border border-line bg-fill1 text-ink2">
-                <Glyph name={glyphForCategory(c.name, c.type)} size={17} />
+                <Glyph name={c.icon ?? glyphForCategory(c.name, c.type)} size={17} />
               </span>
 
               <button

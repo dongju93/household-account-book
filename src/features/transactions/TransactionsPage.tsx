@@ -69,6 +69,7 @@ export function TransactionsPage() {
   const allCategories = catState.data ?? []
   const activeCategories = allCategories.filter((c) => c.isActive)
   const nameById = new Map(allCategories.map((c) => [c.id, c.name]))
+  const iconById = new Map(allCategories.map((c) => [c.id, c.icon]))
 
   const [rows, setRows] = useState<Transaction[]>([])
   const [cursor, setCursor] = useState<TxnCursor | null>(null)
@@ -235,6 +236,7 @@ export function TransactionsPage() {
                   key={txn.id}
                   txn={txn}
                   categoryName={nameById.get(txn.categoryId) ?? '카테고리'}
+                  categoryIcon={iconById.get(txn.categoryId)}
                   onClick={() => setEditing(txn)}
                 />
               ))}

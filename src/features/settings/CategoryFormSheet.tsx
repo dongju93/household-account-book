@@ -6,7 +6,13 @@ import type { FundType } from '../../domain/fundType'
 import { FUND_TYPES, fundTypeLabel, hasBudget, hasGoal } from '../../domain/fundType'
 import type { Category } from '../../domain/types'
 import { validateCategoryInput } from '../../domain/validation'
-import { BottomSheet, Button, ErrorBanner } from '../../ui'
+import { BottomSheet, Button, ErrorBanner, Glyph } from '../../ui'
+import {
+  ALL_GLYPH_KEYS,
+  GLYPH_LABELS,
+  type GlyphKey,
+  glyphForCategory,
+} from '../../ui/glyphForCategory'
 
 const TYPE_ITEMS = FUND_TYPES.map((t) => ({ value: t, label: fundTypeLabel(t) }))
 
@@ -26,6 +32,9 @@ export function CategoryFormSheet({
   const editing = category !== null
   const [type, setType] = useState<FundType>(category?.type ?? 'expense')
   const [name, setName] = useState(category?.name ?? '')
+  const [icon, setIcon] = useState<GlyphKey>(
+    category?.icon ?? glyphForCategory(category?.name ?? '', category?.type ?? 'expense'),
+  )
   const [budget, setBudget] = useState(
     category?.budgetAmount != null ? String(category.budgetAmount) : '',
   )
@@ -52,6 +61,7 @@ export function CategoryFormSheet({
       if (editing) {
         await updateCategory(category.id, {
           name: result.value.name,
+          icon,
           budgetAmount: result.value.budgetAmount,
           goalAmount: result.value.goalAmount,
         })
@@ -59,6 +69,7 @@ export function CategoryFormSheet({
         await createCategory(ledgerId, {
           name: result.value.name,
           type: result.value.type,
+          icon,
           budgetAmount: result.value.budgetAmount,
           goalAmount: result.value.goalAmount,
         })
@@ -108,6 +119,26 @@ export function CategoryFormSheet({
             placeholder="예: 식비"
             className="w-full rounded-[12px] border border-line bg-paper px-3 py-2.5 text-sm outline-none focus:border-ink"
           />
+        </Field>
+
+        <Field label="아이콘">
+          <div className="flex flex-wrap gap-2 rounded-[12px] border border-line bg-paper p-2">
+            {ALL_GLYPH_KEYS.map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setIcon(key)}
+                title={GLYPH_LABELS[key]}
+                className={
+                  'flex flex-col items-center gap-1 rounded-[10px] px-2.5 py-2 transition-colors ' +
+                  (icon === key ? 'bg-ink text-white' : 'text-ink2 hover:bg-fill2')
+                }
+              >
+                <Glyph name={key} size={18} />
+                <span className="text-[9.5px] leading-none font-medium">{GLYPH_LABELS[key]}</span>
+              </button>
+            ))}
+          </div>
         </Field>
 
         {hasBudget(type) && (

@@ -1,14 +1,16 @@
 import type { Transaction } from '../../domain/types'
 import { Glyph, Won } from '../../ui'
-import { glyphForCategory } from '../../ui/glyphForCategory'
+import { type GlyphKey, glyphForCategory } from '../../ui/glyphForCategory'
 
 export function TxnRow({
   txn,
   categoryName,
+  categoryIcon,
   onClick,
 }: {
   txn: Transaction
   categoryName: string
+  categoryIcon?: GlyphKey | null
   onClick?: () => void
 }) {
   const isIncome = txn.type === 'income'
@@ -22,7 +24,7 @@ export function TxnRow({
       className="flex w-full items-center gap-3 border-b border-line-soft py-2.5 text-left last:border-b-0"
     >
       <span className="flex h-9 w-9 flex-none items-center justify-center rounded-[11px] border border-line bg-fill1 text-ink2">
-        <Glyph name={glyphForCategory(categoryName, txn.type)} size={18} />
+        <Glyph name={categoryIcon ?? glyphForCategory(categoryName, txn.type)} size={18} />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">

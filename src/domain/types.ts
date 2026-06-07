@@ -1,3 +1,4 @@
+import type { GlyphKey } from '../ui/glyphForCategory'
 import type { FundType } from './fundType'
 
 export type MemberRole = 'owner' | 'editor' | 'viewer'
@@ -24,6 +25,7 @@ export interface Category {
   ledgerId: string
   name: string
   type: FundType
+  icon: GlyphKey | null
   budgetAmount: number | null
   goalAmount: number | null
   sortOrder: number
