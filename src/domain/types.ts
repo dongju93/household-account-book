@@ -30,6 +30,8 @@ export interface Category {
   goalAmount: number | null
   sortOrder: number
   isActive: boolean
+  /** When true, 달성 확인 shows the daily-allowance pace line (지출 + 예산 only). */
+  showBudgetPace: boolean
   createdAt: string
   updatedAt: string
 }
@@ -78,4 +80,5 @@ export interface CategoryLike {
   type: FundType
   budgetAmount: number | null
   goalAmount: number | null
+  showBudgetPace?: boolean
 }

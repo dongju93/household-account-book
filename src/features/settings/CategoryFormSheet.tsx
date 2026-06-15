@@ -7,7 +7,7 @@ import type { FundType } from '../../domain/fundType'
 import { FUND_TYPES, fundTypeLabel, hasBudget, hasGoal } from '../../domain/fundType'
 import type { Category } from '../../domain/types'
 import { validateCategoryInput } from '../../domain/validation'
-import { BottomSheet, Button, ErrorBanner, Glyph } from '../../ui'
+import { BottomSheet, Button, ErrorBanner, Glyph, Toggle } from '../../ui'
 import {
   ALL_GLYPH_KEYS,
   GLYPH_LABELS,
@@ -40,6 +40,7 @@ export function CategoryFormSheet({
     category?.budgetAmount != null ? String(category.budgetAmount) : '',
   )
   const [goal, setGoal] = useState(category?.goalAmount != null ? String(category.goalAmount) : '')
+  const [showBudgetPace, setShowBudgetPace] = useState(category?.showBudgetPace ?? false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -57,6 +58,12 @@ export function CategoryFormSheet({
     }
     setErrors({})
     setSubmitError(null)
+    const paceEnabled =
+      hasBudget(result.value.type) &&
+      result.value.budgetAmount != null &&
+      result.value.budgetAmount > 0 &&
+      showBudgetPace
+
     setSaving(true)
     try {
       if (editing) {
@@ -65,6 +72,7 @@ export function CategoryFormSheet({
           icon,
           budgetAmount: result.value.budgetAmount,
           goalAmount: result.value.goalAmount,
+          showBudgetPace: paceEnabled,
         })
       } else {
         await createCategory(ledgerId, {
@@ -73,6 +81,7 @@ export function CategoryFormSheet({
           icon,
           budgetAmount: result.value.budgetAmount,
           goalAmount: result.value.goalAmount,
+          showBudgetPace: paceEnabled,
         })
       }
       onSaved()
@@ -97,6 +106,7 @@ export function CategoryFormSheet({
                   setType(it.value)
                   setBudget('')
                   setGoal('')
+                  setShowBudgetPace(false)
                 }}
                 className={
                   'rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ' +
@@ -143,9 +153,24 @@ export function CategoryFormSheet({
         </Field>
 
         {hasBudget(type) && (
-          <Field label="예산 (월)" error={errors.budgetAmount}>
-            <AmountInput value={budget} onChange={setBudget} />
-          </Field>
+          <>
+            <Field label="예산 (월)" error={errors.budgetAmount}>
+              <AmountInput value={budget} onChange={setBudget} />
+            </Field>
+            <div className="flex items-center justify-between rounded-[12px] border border-line bg-paper px-3 py-2.5">
+              <div>
+                <div className="text-xs font-semibold text-ink2">예산 페이스 표시</div>
+                <p className="mt-0.5 text-[11px] text-ink3">
+                  달성 확인에 남은 일수·하루 허용액을 표시합니다.
+                </p>
+              </div>
+              <Toggle
+                on={showBudgetPace}
+                onChange={setShowBudgetPace}
+                disabled={budget.trim() === ''}
+              />
+            </div>
+          </>
         )}
         {hasGoal(type) && (
           <Field label="목표 금액" error={errors.goalAmount}>

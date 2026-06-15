@@ -17,6 +17,7 @@ export function mapCategory(r: Row): Category {
     goalAmount: r.goal_amount,
     sortOrder: r.sort_order,
     isActive: r.is_active,
+    showBudgetPace: r.show_budget_pace ?? false,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }

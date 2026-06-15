@@ -43,6 +43,21 @@ export function todayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/** Calendar length of a month (28–31). */
+export function daysInCalendarMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate()
+}
+
+/** Day-of-month (1–31) from an ISO date in local parsing. */
+export function dayOfMonthFromISO(iso: string): number {
+  return Number(iso.slice(8, 10))
+}
+
+/** Whether `iso` falls in the same calendar month as `ym`. */
+export function isSameYearMonth(ym: YearMonth, iso: string): boolean {
+  return iso.slice(0, 7) === monthKey(ym.year, ym.month)
+}
+
 /** Korean weekday + date header, e.g. "6월 6일 (금)". */
 export function formatDayHeader(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number)

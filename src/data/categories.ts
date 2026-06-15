@@ -28,6 +28,7 @@ export interface CategoryWrite {
   icon: GlyphKey | null
   budgetAmount: number | null
   goalAmount: number | null
+  showBudgetPace?: boolean
   sortOrder?: number
 }
 
@@ -41,6 +42,7 @@ export async function createCategory(ledgerId: string, input: CategoryWrite): Pr
       icon: input.icon,
       budget_amount: input.budgetAmount,
       goal_amount: input.goalAmount,
+      show_budget_pace: input.showBudgetPace ?? false,
       sort_order: input.sortOrder ?? 0,
     })
     .select('*')
@@ -54,6 +56,7 @@ export interface CategoryPatch {
   icon?: GlyphKey | null
   budgetAmount?: number | null
   goalAmount?: number | null
+  showBudgetPace?: boolean
   sortOrder?: number
   isActive?: boolean
 }
@@ -66,6 +69,7 @@ export async function updateCategory(id: string, patch: CategoryPatch): Promise<
   if (patch.icon !== undefined) row.icon = patch.icon
   if (patch.budgetAmount !== undefined) row.budget_amount = patch.budgetAmount
   if (patch.goalAmount !== undefined) row.goal_amount = patch.goalAmount
+  if (patch.showBudgetPace !== undefined) row.show_budget_pace = patch.showBudgetPace
   if (patch.sortOrder !== undefined) row.sort_order = patch.sortOrder
   if (patch.isActive !== undefined) row.is_active = patch.isActive
 

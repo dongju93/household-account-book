@@ -6,10 +6,11 @@ import { useLedger } from '../../auth/useLedger'
 import { listCategories } from '../../data/categories'
 import { fetchTransactionsInRange, materializeMonths } from '../../data/summary'
 import { computeAchievements } from '../../domain/achievement'
+import { computeBudgetPaceRows, paceByCategoryId } from '../../domain/budgetPace'
 import { computeMonthSummary } from '../../domain/monthSummary'
 import { categoryExpenseBreakdown, monthlyTrend } from '../../domain/reports'
 import type { Transaction } from '../../domain/types'
-import { addMonths, currentYearMonth, monthKey, monthRange } from '../../lib/month'
+import { addMonths, currentYearMonth, monthKey, monthRange, todayISO } from '../../lib/month'
 import { AppBar, ErrorBanner, LoadingState, MonthNav, ScreenBody } from '../../ui'
 import { AchievementList } from './AchievementList'
 import { DashboardCharts } from './DashboardCharts'
@@ -44,10 +45,14 @@ export function DashboardPage() {
 
   const selTxns = rangeTxns.filter((t) => t.txnDate >= sel.start && t.txnDate < sel.endExclusive)
   const summary = computeMonthSummary(selTxns)
-  const achievements = computeAchievements(
-    categories.filter((c) => c.isActive),
-    selTxns,
-  ).filter((r) => r.target > 0 || r.actual > 0)
+  const activeCategories = categories.filter((c) => c.isActive)
+  const achievements = computeAchievements(activeCategories, selTxns).filter(
+    (r) => r.target > 0 || r.actual > 0,
+  )
+  const today = todayISO()
+  const paceLookup = paceByCategoryId(computeBudgetPaceRows(activeCategories, selTxns, ym, today))
+  const now = currentYearMonth()
+  const showPace = ym.year === now.year && ym.month === now.month
   const breakdown = categoryExpenseBreakdown(categories, selTxns)
 
   const byMonth = new Map<string, Transaction[]>()
@@ -77,7 +82,11 @@ export function DashboardPage() {
         {!loading && !error && (
           <>
             <SummaryCards summary={summary} />
-            <AchievementList rows={achievements} />
+            <AchievementList
+              rows={achievements}
+              paceByCategoryId={paceLookup}
+              showPace={showPace}
+            />
             <DashboardCharts breakdown={breakdown} summary={summary} trend={trend} />
           </>
         )}
