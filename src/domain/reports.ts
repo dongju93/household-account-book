@@ -1,5 +1,23 @@
+import type { YearMonth } from '../lib/month'
+import { monthKey } from '../lib/month'
 import { computeMonthSummary, type MonthSummary } from './monthSummary'
-import type { CategoryLike, TxnLike } from './types'
+import type { CategoryLike, Transaction, TxnLike } from './types'
+
+/** Short month label for chart axes, e.g. "06월". */
+export function monthTrendLabel(month: string): string {
+  return `${Number(month.slice(5, 7))}월`
+}
+
+/** Bucket transactions into month keys for trend/stack aggregations. */
+export function groupTransactionsByMonth(
+  months: readonly YearMonth[],
+  txns: readonly Transaction[],
+): Map<string, Transaction[]> {
+  const byMonth = new Map<string, Transaction[]>()
+  for (const m of months) byMonth.set(monthKey(m.year, m.month), [])
+  for (const t of txns) byMonth.get(t.txnDate.slice(0, 7))?.push(t)
+  return byMonth
+}
 
 export interface MonthlyTrendPoint extends MonthSummary {
   month: string // 'YYYY-MM'
@@ -101,7 +119,7 @@ export function monthlyCategoryStacks(
   const points: MonthlyCategoryStackPoint[] = [...txnsByMonth.keys()].sort().map((month) => {
     const point: MonthlyCategoryStackPoint = {
       month,
-      label: `${Number(month.slice(5, 7))}월`,
+      label: monthTrendLabel(month),
     }
     let other = 0
     for (const t of txnsByMonth.get(month) ?? []) {

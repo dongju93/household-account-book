@@ -8,9 +8,12 @@ import { fetchTransactionsInRange, materializeMonths } from '../../data/summary'
 import { computeAchievements } from '../../domain/achievement'
 import { computeBudgetPaceRows, paceByCategoryId } from '../../domain/budgetPace'
 import { computeMonthSummary } from '../../domain/monthSummary'
-import { categoryExpenseBreakdown, monthlyTrend } from '../../domain/reports'
-import type { Transaction } from '../../domain/types'
-import { addMonths, currentYearMonth, monthKey, monthRange, todayISO } from '../../lib/month'
+import {
+  categoryExpenseBreakdown,
+  groupTransactionsByMonth,
+  monthlyTrend,
+} from '../../domain/reports'
+import { addMonths, currentYearMonth, monthRange, todayISO } from '../../lib/month'
 import { AppBar, ErrorBanner, LoadingState, MonthNav, ScreenBody } from '../../ui'
 import { AchievementList } from './AchievementList'
 import { DashboardCharts } from './DashboardCharts'
@@ -23,7 +26,6 @@ export function DashboardPage() {
   const { version } = useRefresh()
   const [ym, setYm] = useState(currentYearMonth())
 
-  // selected month + the preceding 5 months for the trend line
   const months = Array.from({ length: TREND_MONTHS }, (_, i) =>
     addMonths(ym, -(TREND_MONTHS - 1 - i)),
   )
@@ -55,9 +57,7 @@ export function DashboardPage() {
   const showPace = ym.year === now.year && ym.month === now.month
   const breakdown = categoryExpenseBreakdown(categories, selTxns)
 
-  const byMonth = new Map<string, Transaction[]>()
-  for (const m of months) byMonth.set(monthKey(m.year, m.month), [])
-  for (const t of rangeTxns) byMonth.get(t.txnDate.slice(0, 7))?.push(t)
+  const byMonth = groupTransactionsByMonth(months, rangeTxns)
   const trend = monthlyTrend(byMonth)
 
   return (

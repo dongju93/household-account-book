@@ -15,6 +15,12 @@ export function fundTypeLabel(type: FundType): string {
   return FUND_TYPE_LABELS[type]
 }
 
+/** Segmented-control items for every fund type. */
+export const FUND_TYPE_ITEMS = FUND_TYPES.map((t) => ({
+  value: t,
+  label: fundTypeLabel(t),
+}))
+
 // 지출 manages a budget; 저축 manages a goal; 수입/투자 have neither (spec §2.2).
 export function hasBudget(type: FundType): boolean {
   return type === 'expense'

@@ -1,7 +1,5 @@
 import { useState } from 'react'
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   Cell,
@@ -17,18 +15,14 @@ import {
 import type { MonthSummary } from '../../domain/monthSummary'
 import type { CategoryBreakdownRow, MonthlyTrendPoint } from '../../domain/reports'
 import { compactWon } from '../../lib/format'
-import { Card, EmptyState } from '../../ui'
+import { BalanceTrendChart, Card, EmptyState, FUND_CHART_COLORS } from '../../ui'
 import {
   CHART_PALETTE,
   ChartCardHeader,
-  ChartDefs,
   ChartGrid,
   ChartLegend,
-  ChartZeroLine,
   DonutCenterLabel,
-  FUND_CHART_COLORS,
   RechartsTooltip,
-  chartXAxisProps,
   chartYAxisProps,
 } from '../../ui/charts'
 
@@ -51,14 +45,6 @@ export function DashboardCharts({
     { name: '투자', value: summary.totalInvestment, fill: FUND_CHART_COLORS.investment },
   ]
   const hasType = typeData.some((d) => d.value > 0)
-
-  const trendData = trend.map((t) => ({
-    label: `${Number(t.month.slice(5, 7))}월`,
-    balance: t.balance,
-    stroke: t.balance >= 0 ? FUND_CHART_COLORS.saving : FUND_CHART_COLORS.expense,
-  }))
-  const balanceFill =
-    (trendData.at(-1)?.balance ?? 0) >= 0 ? 'url(#balanceGradientPos)' : 'url(#balanceGradientNeg)'
 
   return (
     <div className="flex flex-col gap-3">
@@ -156,37 +142,10 @@ export function DashboardCharts({
         )}
       </Card>
 
-      <Card>
-        <ChartCardHeader
-          title="월별 수지 추세"
-          legend={<ChartLegend items={[{ label: '수지', color: FUND_CHART_COLORS.balance }]} />}
-        />
-        <ResponsiveContainer width="100%" height={190}>
-          <AreaChart data={trendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-            <ChartDefs />
-            <ChartGrid />
-            <XAxis dataKey="label" {...chartXAxisProps} />
-            <YAxis {...chartYAxisProps} />
-            <ChartZeroLine />
-            <RechartsTooltip />
-            <Area
-              type="monotone"
-              dataKey="balance"
-              name="수지"
-              stroke={FUND_CHART_COLORS.balance}
-              strokeWidth={2.4}
-              fill={balanceFill}
-              dot={(props) => {
-                const { cx, cy, payload } = props
-                if (cx == null || cy == null) return null
-                const color = (payload as { stroke?: string }).stroke ?? FUND_CHART_COLORS.balance
-                return <circle cx={cx} cy={cy} r={3} fill={color} stroke="#fff" strokeWidth={1.5} />
-              }}
-              activeDot={{ r: 5, strokeWidth: 0 }}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </Card>
+      <BalanceTrendChart
+        trend={trend}
+        legend={<ChartLegend items={[{ label: '수지', color: FUND_CHART_COLORS.balance }]} />}
+      />
     </div>
   )
 }

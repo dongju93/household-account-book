@@ -2,7 +2,7 @@ import { useActionState, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 
 import { useAuth } from '../../auth/useAuth'
-import { Button, ErrorBanner, Segmented } from '../../ui'
+import { Button, ErrorBanner, Segmented, TextInput } from '../../ui'
 
 type Mode = 'login' | 'signup'
 
@@ -66,25 +66,23 @@ export function LoginPage() {
         <form action={formAction} className="flex flex-col gap-3">
           <label className="flex flex-col gap-1">
             <span className="text-xs font-semibold text-ink2">이메일</span>
-            <input
+            <TextInput
               name="email"
               type="email"
               autoComplete="email"
               required
               placeholder="you@example.com"
-              className="rounded-[12px] border border-line bg-paper px-3 py-2.5 text-sm outline-none focus:border-ink"
             />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-semibold text-ink2">비밀번호</span>
-            <input
+            <TextInput
               name="password"
               type="password"
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               required
               minLength={6}
               placeholder="6자 이상"
-              className="rounded-[12px] border border-line bg-paper px-3 py-2.5 text-sm outline-none focus:border-ink"
             />
           </label>
 

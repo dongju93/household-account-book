@@ -1,15 +1,13 @@
 import { useState } from 'react'
 
-import { describeError } from '../../data/errors'
+import { useValidatedSubmit } from '../../app/useValidatedSubmit'
 import { createTransaction, updateTransaction } from '../../data/transactions'
+import { FUND_TYPE_ITEMS } from '../../domain/fundType'
 import type { FundType } from '../../domain/fundType'
-import { FUND_TYPES, fundTypeLabel } from '../../domain/fundType'
 import type { Category, Transaction } from '../../domain/types'
 import { validateTransactionInput } from '../../domain/validation'
 import { todayISO } from '../../lib/month'
-import { BottomSheet, Button, Chip, ErrorBanner, Segmented, Toggle } from '../../ui'
-
-const TYPE_ITEMS = FUND_TYPES.map((t) => ({ value: t, label: fundTypeLabel(t) }))
+import { BottomSheet, Button, Chip, ErrorBanner, Segmented, TextInput, Toggle } from '../../ui'
 
 /**
  * Create or edit a transaction. In create mode it offers 저장 후 계속 입력, which
@@ -41,11 +39,8 @@ export function TransactionSheet({
   const [date, setDate] = useState(transaction?.txnDate ?? todayISO())
   const [memo, setMemo] = useState(transaction?.memo ?? '')
   const [keepOpen, setKeepOpen] = useState(false)
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const [submitError, setSubmitError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
+  const { errors, submitError, saving, run } = useValidatedSubmit()
 
-  // Changing 구분 re-filters the category list to that type's active categories.
   const typeCategories = categories.filter((c) => c.type === type)
 
   function changeType(next: FundType) {
@@ -55,41 +50,33 @@ export function TransactionSheet({
 
   async function handleSubmit() {
     const category = categories.find((c) => c.id === categoryId) ?? null
-    const result = validateTransactionInput(
-      { amount, date, categoryId: categoryId || null, type, memo },
-      category,
+    const ok = await run(
+      () =>
+        validateTransactionInput(
+          { amount, date, categoryId: categoryId || null, type, memo },
+          category,
+        ),
+      async (value) => {
+        const write = {
+          categoryId: value.categoryId,
+          type: value.type,
+          txnDate: value.date,
+          amount: value.amount,
+          memo: value.memo,
+        }
+        if (editing) await updateTransaction(transaction.id, write)
+        else await createTransaction(ledgerId, write)
+        onSaved()
+        if (editing || !keepOpen) {
+          onClose()
+        } else {
+          setAmount('')
+          setMemo('')
+          setCategoryId('')
+        }
+      },
     )
-    if (!result.ok) {
-      setErrors(result.errors)
-      return
-    }
-    setErrors({})
-    setSubmitError(null)
-    setSaving(true)
-    const write = {
-      categoryId: result.value.categoryId,
-      type: result.value.type,
-      txnDate: result.value.date,
-      amount: result.value.amount,
-      memo: result.value.memo,
-    }
-    try {
-      if (editing) await updateTransaction(transaction.id, write)
-      else await createTransaction(ledgerId, write)
-      onSaved()
-      if (editing || !keepOpen) {
-        onClose()
-      } else {
-        // keep date + 구분, reset amount/memo for fast consecutive entry
-        setAmount('')
-        setMemo('')
-        setCategoryId('')
-      }
-    } catch (err) {
-      setSubmitError(describeError(err).message)
-    } finally {
-      setSaving(false)
-    }
+    if (!ok) return
   }
 
   return (
@@ -101,9 +88,8 @@ export function TransactionSheet({
           </p>
         )}
 
-        <Segmented items={TYPE_ITEMS} value={type} onChange={changeType} />
+        <Segmented items={FUND_TYPE_ITEMS} value={type} onChange={changeType} />
 
-        {/* amount display */}
         <div className="rounded-[13px] border border-line px-3.5 py-3 text-right">
           <span className="float-left mt-2 text-xs text-ink3">금액</span>
           <input
@@ -117,7 +103,6 @@ export function TransactionSheet({
         </div>
         {errors.amount && <span className="-mt-1 text-[11px] text-danger">{errors.amount}</span>}
 
-        {/* category chips for the selected 구분 */}
         {typeCategories.length === 0 ? (
           <p className="text-[12px] text-ink3">
             이 구분의 활성 카테고리가 없습니다. 설정에서 추가하세요.
@@ -138,21 +123,16 @@ export function TransactionSheet({
         <div className="flex gap-2">
           <label className="flex flex-1 flex-col gap-1">
             <span className="text-xs font-semibold text-ink2">날짜</span>
-            <input
+            <TextInput
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="tnum w-full rounded-[12px] border border-line bg-paper px-3 py-2.5 text-sm outline-none focus:border-ink"
+              className="tnum"
             />
           </label>
           <label className="flex flex-[1.2] flex-col gap-1">
             <span className="text-xs font-semibold text-ink2">메모</span>
-            <input
-              value={memo}
-              onChange={(e) => setMemo(e.target.value)}
-              placeholder="메모"
-              className="w-full rounded-[12px] border border-line bg-paper px-3 py-2.5 text-sm outline-none focus:border-ink"
-            />
+            <TextInput value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="메모" />
           </label>
         </div>
         {errors.date && <span className="-mt-1 text-[11px] text-danger">{errors.date}</span>}

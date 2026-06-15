@@ -1,6 +1,6 @@
 import type { Transaction } from '../domain/types'
 import type { YearMonth } from '../lib/month'
-import { monthKey, monthRange } from '../lib/month'
+import { monthKey } from '../lib/month'
 import { supabase } from '../lib/supabase'
 import { mapTransaction } from './mappers'
 
@@ -37,13 +37,4 @@ export async function fetchTransactionsInRange(
     .order('txn_date', { ascending: false })
   if (error) throw error
   return (data ?? []).map(mapTransaction)
-}
-
-/** A single month's transactions (used by the dashboard aggregation). */
-export async function fetchMonthTransactions(
-  ledgerId: string,
-  ym: YearMonth,
-): Promise<Transaction[]> {
-  const { start, endExclusive } = monthRange(ym.year, ym.month)
-  return fetchTransactionsInRange(ledgerId, start, endExclusive)
 }

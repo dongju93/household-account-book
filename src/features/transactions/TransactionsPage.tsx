@@ -1,24 +1,27 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { useAsyncData } from '../../app/useAsyncData'
+import { useMaterializedMonth } from '../../app/useMaterializedMonth'
+import { usePaginatedList } from '../../app/usePaginatedList'
 import { useRefresh } from '../../app/useRefresh'
 import { useLedger } from '../../auth/useLedger'
 import { listCategories } from '../../data/categories'
 import { type DescribedError, describeError } from '../../data/errors'
-import { materializeMonth } from '../../data/summary'
 import {
   deleteTransaction,
   listAllTransactions,
   listTransactions,
   type TxnCursor,
+  type TxnFilter,
 } from '../../data/transactions'
 import { buildTxnExportRows, txnExportFilename } from '../../domain/exportTransactions'
 import type { FundType } from '../../domain/fundType'
 import { FUND_TYPES, fundTypeLabel } from '../../domain/fundType'
+import { groupTransactionsByDate } from '../../domain/transactionGroups'
 import type { Transaction } from '../../domain/types'
 import { downloadTxnExportXlsx } from '../../lib/exportXlsx'
 import { won } from '../../lib/format'
-import { addMonths, currentYearMonth, formatDayHeader, monthKey, monthRange } from '../../lib/month'
+import { addMonths, currentYearMonth, formatDayHeader, monthRange } from '../../lib/month'
 import {
   AppBar,
   Button,
@@ -28,29 +31,11 @@ import {
   LoadingState,
   MonthNav,
   ScreenBody,
+  Select,
+  TextInput,
 } from '../../ui'
 import { TransactionSheet } from './TransactionSheet'
 import { TxnRow } from './TxnRow'
-
-interface DateGroup {
-  date: string
-  rows: Transaction[]
-  net: number
-}
-
-function groupByDate(rows: Transaction[]): DateGroup[] {
-  const groups: DateGroup[] = []
-  let current: DateGroup | null = null
-  for (const r of rows) {
-    if (!current || current.date !== r.txnDate) {
-      current = { date: r.txnDate, rows: [], net: 0 }
-      groups.push(current)
-    }
-    current.rows.push(r)
-    current.net += r.type === 'income' ? r.amount : -r.amount
-  }
-  return groups
-}
 
 export function TransactionsPage() {
   const { ledgerId } = useLedger()
@@ -65,13 +50,12 @@ export function TransactionsPage() {
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<DescribedError | null>(null)
 
-  // debounce the keyword search so we don't query on every keystroke
   useEffect(() => {
     const t = setTimeout(() => setSearch(searchInput.trim()), 300)
     return () => clearTimeout(t)
   }, [searchInput])
 
-  // all categories (incl. inactive) for name display; active subset for filters
+  // All categories (incl. inactive) for name display on historical rows.
   const catState = useAsyncData(
     () => (ledgerId ? listCategories(ledgerId) : Promise.resolve([])),
     [ledgerId, version],
@@ -81,77 +65,32 @@ export function TransactionsPage() {
   const nameById = new Map(allCategories.map((c) => [c.id, c.name]))
   const iconById = new Map(allCategories.map((c) => [c.id, c.icon]))
 
-  const [rows, setRows] = useState<Transaction[]>([])
-  const [cursor, setCursor] = useState<TxnCursor | null>(null)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [listError, setListError] = useState<DescribedError | null>(null)
-  const materializedRef = useRef<string | null>(null)
-
   const range = monthRange(ym.year, ym.month)
-  const buildFilter = () => ({
+  const filter: TxnFilter = {
     start: range.start,
     endExclusive: range.endExclusive,
     type,
     categoryId,
     search,
-  })
+  }
 
+  const ensureMaterialized = useMaterializedMonth(ledgerId, ym, version)
   const listKey = ledgerId
     ? `${ledgerId}:${ym.year}:${ym.month}:${type}:${categoryId}:${search}:${version}`
     : null
-  const [syncedKey, setSyncedKey] = useState(listKey)
-  const [fetchedKey, setFetchedKey] = useState<string | null>(null)
-  if (syncedKey !== listKey) {
-    setSyncedKey(listKey)
-    setListError(null)
-  }
-  const listLoading = listKey !== null && fetchedKey !== listKey
 
-  // load the first page whenever the month, filters or data version change
-  // syncedKey captures all list inputs
-  // oxlint-disable-next-line react/exhaustive-deps
-  useEffect(() => {
-    if (!ledgerId || syncedKey === null) return
-    let active = true
-    void (async () => {
-      try {
-        // materialize the month's recurring rows once per month+version
-        const matKey = `${monthKey(ym.year, ym.month)}:${version}`
-        if (materializedRef.current !== matKey) {
-          await materializeMonth(ledgerId, ym)
-          materializedRef.current = matKey
-        }
-        const page = await listTransactions(ledgerId, buildFilter())
-        if (!active) return
-        setRows(page.rows)
-        setCursor(page.nextCursor)
-        setListError(null)
-        setFetchedKey(syncedKey)
-      } catch (err) {
-        if (active) {
-          setListError(describeError(err))
-          setFetchedKey(syncedKey)
-        }
-      }
-    })()
-    return () => {
-      active = false
-    }
-  }, [syncedKey])
-
-  async function loadMore() {
-    if (!ledgerId || !cursor) return
-    setLoadingMore(true)
-    try {
-      const page = await listTransactions(ledgerId, buildFilter(), cursor)
-      setRows((prev) => [...prev, ...page.rows])
-      setCursor(page.nextCursor)
-    } catch (err) {
-      setListError(describeError(err))
-    } finally {
-      setLoadingMore(false)
-    }
-  }
+  const {
+    rows,
+    loading,
+    loadingMore,
+    error: listError,
+    hasMore,
+    loadMore,
+  } = usePaginatedList<Transaction, TxnCursor>({
+    listKey,
+    beforeLoad: ensureMaterialized,
+    loadPage: (cursor) => listTransactions(ledgerId!, filter, cursor),
+  })
 
   async function handleDelete(txn: Transaction) {
     await deleteTransaction({
@@ -167,7 +106,7 @@ export function TransactionsPage() {
 
   function selectType(next: FundType | null) {
     setType(next)
-    setCategoryId(null) // reset category when 구분 changes
+    setCategoryId(null)
   }
 
   async function handleExport() {
@@ -175,12 +114,8 @@ export function TransactionsPage() {
     setExporting(true)
     setExportError(null)
     try {
-      const matKey = `${monthKey(ym.year, ym.month)}:${version}`
-      if (materializedRef.current !== matKey) {
-        await materializeMonth(ledgerId, ym)
-        materializedRef.current = matKey
-      }
-      const txns = await listAllTransactions(ledgerId, buildFilter())
+      await ensureMaterialized()
+      const txns = await listAllTransactions(ledgerId, filter)
       const exportRows = buildTxnExportRows(txns, nameById)
       await downloadTxnExportXlsx(exportRows, txnExportFilename(ym))
     } catch (err) {
@@ -190,7 +125,7 @@ export function TransactionsPage() {
     }
   }
 
-  const groups = groupByDate(rows)
+  const groups = groupTransactionsByDate(rows)
 
   return (
     <>
@@ -208,7 +143,7 @@ export function TransactionsPage() {
           <button
             type="button"
             onClick={() => void handleExport()}
-            disabled={!ledgerId || exporting || listLoading}
+            disabled={!ledgerId || exporting || loading}
             className="text-[13px] font-semibold text-ink2 transition-colors enabled:hover:text-ink disabled:opacity-40"
           >
             {exporting ? '보내는 중…' : '보내기'}
@@ -216,13 +151,11 @@ export function TransactionsPage() {
         }
       />
       <ScreenBody>
-        {/* filters */}
         <div className="mb-2 flex flex-col gap-2">
-          <input
+          <TextInput
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="메모 검색"
-            className="w-full rounded-[12px] border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-ink"
           />
           <div className="flex gap-1.5 overflow-x-auto pb-1">
             <Chip active={type === null} onClick={() => selectType(null)}>
@@ -234,11 +167,7 @@ export function TransactionsPage() {
               </Chip>
             ))}
           </div>
-          <select
-            value={categoryId ?? ''}
-            onChange={(e) => setCategoryId(e.target.value || null)}
-            className="w-full rounded-[12px] border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-ink"
-          >
+          <Select value={categoryId ?? ''} onChange={(e) => setCategoryId(e.target.value || null)}>
             <option value="">전체 카테고리</option>
             {activeCategories
               .filter((c) => !type || c.type === type)
@@ -247,24 +176,24 @@ export function TransactionsPage() {
                   {c.name}
                 </option>
               ))}
-          </select>
+          </Select>
         </div>
 
-        {listLoading && <LoadingState />}
+        {loading && <LoadingState />}
         {(listError || exportError) && (
           <ErrorBanner
             message={(listError ?? exportError)!.message}
             variant={(listError ?? exportError)!.permission ? 'permission' : 'error'}
           />
         )}
-        {!listLoading && !listError && rows.length === 0 && (
+        {!loading && !listError && rows.length === 0 && (
           <EmptyState
             title="거래가 없습니다"
             description="＋ 버튼으로 이 달의 거래를 추가해 보세요."
           />
         )}
 
-        {!listLoading &&
+        {!loading &&
           !listError &&
           groups.map((g) => (
             <div key={g.date}>
@@ -284,9 +213,9 @@ export function TransactionsPage() {
             </div>
           ))}
 
-        {!listLoading && !listError && cursor && (
+        {!loading && !listError && hasMore && (
           <div className="pt-3">
-            <Button variant="ghost" onClick={loadMore} disabled={loadingMore}>
+            <Button variant="ghost" onClick={() => void loadMore()} disabled={loadingMore}>
               {loadingMore ? '불러오는 중…' : '더 보기'}
             </Button>
           </div>
