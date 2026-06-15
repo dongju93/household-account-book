@@ -65,6 +65,21 @@ export async function listTransactions(
   return { rows, nextCursor }
 }
 
+/** Fetch every row matching the filter by walking keyset pages. */
+export async function listAllTransactions(
+  ledgerId: string,
+  filter: TxnFilter,
+): Promise<Transaction[]> {
+  const all: Transaction[] = []
+  let cursor: TxnCursor | null = null
+  do {
+    const page = await listTransactions(ledgerId, filter, cursor)
+    all.push(...page.rows)
+    cursor = page.nextCursor
+  } while (cursor)
+  return all
+}
+
 export interface TxnWrite {
   categoryId: string
   type: FundType

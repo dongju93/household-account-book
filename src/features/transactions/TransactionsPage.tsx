@@ -6,10 +6,17 @@ import { useLedger } from '../../auth/useLedger'
 import { listCategories } from '../../data/categories'
 import { type DescribedError, describeError } from '../../data/errors'
 import { materializeMonth } from '../../data/summary'
-import { deleteTransaction, listTransactions, type TxnCursor } from '../../data/transactions'
+import {
+  deleteTransaction,
+  listAllTransactions,
+  listTransactions,
+  type TxnCursor,
+} from '../../data/transactions'
+import { buildTxnExportRows, txnExportFilename } from '../../domain/exportTransactions'
 import type { FundType } from '../../domain/fundType'
 import { FUND_TYPES, fundTypeLabel } from '../../domain/fundType'
 import type { Transaction } from '../../domain/types'
+import { downloadTxnExportXlsx } from '../../lib/exportXlsx'
 import { won } from '../../lib/format'
 import { addMonths, currentYearMonth, formatDayHeader, monthKey, monthRange } from '../../lib/month'
 import {
@@ -55,6 +62,8 @@ export function TransactionsPage() {
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<Transaction | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<DescribedError | null>(null)
 
   // debounce the keyword search so we don't query on every keystroke
   useEffect(() => {
@@ -161,6 +170,26 @@ export function TransactionsPage() {
     setCategoryId(null) // reset category when 구분 changes
   }
 
+  async function handleExport() {
+    if (!ledgerId || exporting) return
+    setExporting(true)
+    setExportError(null)
+    try {
+      const matKey = `${monthKey(ym.year, ym.month)}:${version}`
+      if (materializedRef.current !== matKey) {
+        await materializeMonth(ledgerId, ym)
+        materializedRef.current = matKey
+      }
+      const txns = await listAllTransactions(ledgerId, buildFilter())
+      const exportRows = buildTxnExportRows(txns, nameById)
+      await downloadTxnExportXlsx(exportRows, txnExportFilename(ym))
+    } catch (err) {
+      setExportError(describeError(err))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const groups = groupByDate(rows)
 
   return (
@@ -175,6 +204,16 @@ export function TransactionsPage() {
         }
         title="내역"
         center
+        right={
+          <button
+            type="button"
+            onClick={() => void handleExport()}
+            disabled={!ledgerId || exporting || listLoading}
+            className="text-[13px] font-semibold text-ink2 transition-colors enabled:hover:text-ink disabled:opacity-40"
+          >
+            {exporting ? '보내는 중…' : '보내기'}
+          </button>
+        }
       />
       <ScreenBody>
         {/* filters */}
@@ -212,10 +251,10 @@ export function TransactionsPage() {
         </div>
 
         {listLoading && <LoadingState />}
-        {listError && (
+        {(listError || exportError) && (
           <ErrorBanner
-            message={listError.message}
-            variant={listError.permission ? 'permission' : 'error'}
+            message={(listError ?? exportError)!.message}
+            variant={(listError ?? exportError)!.permission ? 'permission' : 'error'}
           />
         )}
         {!listLoading && !listError && rows.length === 0 && (
