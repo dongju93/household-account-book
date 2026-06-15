@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 
 import { computeMonthSummary } from './monthSummary'
-import { categoryExpenseBreakdown, monthlyTrend } from './reports'
+import { categoryExpenseBreakdown, monthlyCategoryStacks, monthlyTrend } from './reports'
 import type { CategoryLike, TxnLike } from './types'
 
 const fixture: TxnLike[] = [
@@ -50,5 +50,38 @@ describe('categoryExpenseBreakdown', () => {
     expect(
       categoryExpenseBreakdown(cats, [{ type: 'income', amount: 100, categoryId: 'salary' }]),
     ).toEqual([])
+  })
+})
+
+describe('monthlyCategoryStacks', () => {
+  const cats: CategoryLike[] = [
+    { id: 'food', name: '식비', type: 'expense', budgetAmount: 500_000, goalAmount: null },
+    { id: 'bus', name: '교통', type: 'expense', budgetAmount: 200_000, goalAmount: null },
+    { id: 'shop', name: '쇼핑', type: 'expense', budgetAmount: 300_000, goalAmount: null },
+  ]
+
+  it('stacks top categories per month and rolls the rest into 기타', () => {
+    const byMonth = new Map<string, TxnLike[]>([
+      [
+        '2026-05',
+        [
+          { type: 'expense', amount: 100, categoryId: 'food' },
+          { type: 'expense', amount: 50, categoryId: 'shop' },
+        ],
+      ],
+      [
+        '2026-06',
+        [
+          { type: 'expense', amount: 430_000, categoryId: 'food' },
+          { type: 'expense', amount: 84_000, categoryId: 'bus' },
+          { type: 'expense', amount: 20_000, categoryId: 'shop' },
+        ],
+      ],
+    ])
+    const { points, series } = monthlyCategoryStacks(cats, byMonth, 2)
+    expect(series.map((s) => s.key)).toEqual(['식비', '교통', '기타'])
+    expect(points).toHaveLength(2)
+    expect(points[0]).toMatchObject({ label: '5월', 식비: 100, 교통: 0, 기타: 50 })
+    expect(points[1]).toMatchObject({ label: '6월', 식비: 430_000, 교통: 84_000, 기타: 20_000 })
   })
 })

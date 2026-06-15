@@ -53,3 +53,72 @@ export function categoryExpenseBreakdown(
   }
   return rows.sort((a, b) => b.amount - a.amount)
 }
+
+export interface CategoryStackSeries {
+  key: string
+  name: string
+}
+
+export interface MonthlyCategoryStackPoint {
+  month: string
+  label: string
+  /** Dynamic keys per category name (or "기타") map to expense amounts. */
+  [segment: string]: string | number
+}
+
+/**
+ * Top-N expense categories per month, remainder rolled into "기타".
+ * Powers the stacked bar chart on the 통계 screen.
+ */
+export function monthlyCategoryStacks(
+  categories: readonly CategoryLike[],
+  txnsByMonth: ReadonlyMap<string, readonly TxnLike[]>,
+  topN = 4,
+): { points: MonthlyCategoryStackPoint[]; series: CategoryStackSeries[] } {
+  const nameById = new Map(categories.map((c) => [c.id, c.name]))
+  const globalTotals = new Map<string, number>()
+
+  for (const txns of txnsByMonth.values()) {
+    for (const t of txns) {
+      if (t.type !== 'expense') continue
+      globalTotals.set(t.categoryId, (globalTotals.get(t.categoryId) ?? 0) + t.amount)
+    }
+  }
+
+  const topIds = [...globalTotals.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topN)
+    .map(([id]) => id)
+
+  const series: CategoryStackSeries[] = topIds.map((id) => {
+    const name = nameById.get(id) ?? '기타'
+    return { key: name, name }
+  })
+  const hasOther = globalTotals.size > topIds.length
+  if (hasOther) series.push({ key: '기타', name: '기타' })
+
+  const topIdSet = new Set(topIds)
+  const points: MonthlyCategoryStackPoint[] = [...txnsByMonth.keys()].sort().map((month) => {
+    const point: MonthlyCategoryStackPoint = {
+      month,
+      label: `${Number(month.slice(5, 7))}월`,
+    }
+    let other = 0
+    for (const t of txnsByMonth.get(month) ?? []) {
+      if (t.type !== 'expense') continue
+      const name = nameById.get(t.categoryId) ?? '기타'
+      if (topIdSet.has(t.categoryId)) {
+        point[name] = (Number(point[name]) || 0) + t.amount
+      } else {
+        other += t.amount
+      }
+    }
+    if (hasOther && other > 0) point['기타'] = other
+    for (const s of series) {
+      if (point[s.key] == null) point[s.key] = 0
+    }
+    return point
+  })
+
+  return { points, series }
+}
