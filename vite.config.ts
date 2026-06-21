@@ -2,16 +2,17 @@ import babel from '@rolldown/plugin-babel'
 import tailwindcss from '@tailwindcss/vite'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import { defineConfig } from 'vite-plus'
+import type { PluginOption } from 'vite-plus'
 
 // https://viteplus.dev/guide/ — defineConfig here is a superset of Vite's that
 // also configures Vitest, Oxlint, and Oxfmt from this single file.
 export default defineConfig({
   plugins: [
-    react(),
+    ...react(),
     babel({ presets: [reactCompilerPreset()] }),
     // Tailwind v4 runs as a Vite plugin — no tailwind.config.js / PostCSS needed.
-    tailwindcss(),
-  ],
+    ...tailwindcss(),
+  ] as unknown as PluginOption[],
   test: {
     // Component tests need a DOM; jsdom is the lightweight standard for Vitest.
     environment: 'jsdom',
