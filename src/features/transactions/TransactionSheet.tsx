@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 
 import { useValidatedSubmit } from '../../app/useValidatedSubmit'
 import { createTransaction, updateTransaction } from '../../data/transactions'
@@ -40,6 +40,9 @@ export function TransactionSheet({
   const [memo, setMemo] = useState(transaction?.memo ?? '')
   const [keepOpen, setKeepOpen] = useState(false)
   const { errors, submitError, saving, run } = useValidatedSubmit()
+  const amountErrorId = useId()
+  const categoryErrorId = useId()
+  const dateErrorId = useId()
 
   const typeCategories = categories.filter((c) => c.type === type)
 
@@ -98,17 +101,28 @@ export function TransactionSheet({
             inputMode="numeric"
             placeholder="0"
             autoFocus={!editing}
+            aria-invalid={errors.amount ? true : undefined}
+            aria-describedby={errors.amount ? amountErrorId : undefined}
             className="tnum w-full bg-transparent text-right text-2xl font-extrabold text-ink outline-none placeholder:text-ink3"
           />
         </label>
-        {errors.amount && <span className="-mt-1 text-[11px] text-danger">{errors.amount}</span>}
+        {errors.amount && (
+          <span id={amountErrorId} className="-mt-1 text-[11px] text-danger">
+            {errors.amount}
+          </span>
+        )}
 
         {typeCategories.length === 0 ? (
           <p className="text-[12px] text-ink3">
             이 구분의 활성 카테고리가 없습니다. 설정에서 추가하세요.
           </p>
         ) : (
-          <div className="flex flex-wrap gap-1.5">
+          <div
+            className="flex flex-wrap gap-1.5"
+            role="group"
+            aria-invalid={errors.categoryId ? true : undefined}
+            aria-describedby={errors.categoryId ? categoryErrorId : undefined}
+          >
             {typeCategories.map((c) => (
               <Chip key={c.id} active={c.id === categoryId} onClick={() => setCategoryId(c.id)}>
                 {c.name}
@@ -117,7 +131,9 @@ export function TransactionSheet({
           </div>
         )}
         {errors.categoryId && (
-          <span className="-mt-1 text-[11px] text-danger">{errors.categoryId}</span>
+          <span id={categoryErrorId} className="-mt-1 text-[11px] text-danger">
+            {errors.categoryId}
+          </span>
         )}
 
         <div className="flex gap-2">
@@ -127,6 +143,8 @@ export function TransactionSheet({
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
+              aria-invalid={errors.date ? true : undefined}
+              aria-describedby={errors.date ? dateErrorId : undefined}
               className="tnum"
             />
           </label>
@@ -135,7 +153,11 @@ export function TransactionSheet({
             <TextInput value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="메모" />
           </label>
         </div>
-        {errors.date && <span className="-mt-1 text-[11px] text-danger">{errors.date}</span>}
+        {errors.date && (
+          <span id={dateErrorId} className="-mt-1 text-[11px] text-danger">
+            {errors.date}
+          </span>
+        )}
 
         {!editing && (
           <div className="flex items-center justify-between">
