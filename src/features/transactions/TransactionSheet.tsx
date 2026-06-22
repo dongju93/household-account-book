@@ -90,7 +90,7 @@ export function TransactionSheet({
 
         <Segmented items={FUND_TYPE_ITEMS} value={type} onChange={changeType} />
 
-        <div className="rounded-[13px] border border-line px-3.5 py-3 text-right">
+        <label className="rounded-[13px] border border-line px-3.5 py-3 text-right">
           <span className="float-left mt-2 text-xs text-ink3">금액</span>
           <input
             value={amount}
@@ -100,7 +100,7 @@ export function TransactionSheet({
             autoFocus={!editing}
             className="tnum w-full bg-transparent text-right text-2xl font-extrabold text-ink outline-none placeholder:text-ink3"
           />
-        </div>
+        </label>
         {errors.amount && <span className="-mt-1 text-[11px] text-danger">{errors.amount}</span>}
 
         {typeCategories.length === 0 ? (

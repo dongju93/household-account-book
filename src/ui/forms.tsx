@@ -37,7 +37,15 @@ export function Select({ className, children, ...rest }: SelectHTMLAttributes<HT
   )
 }
 
-export function AmountInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+export function AmountInput({
+  value,
+  onChange,
+  'aria-label': ariaLabel,
+}: {
+  value: string
+  onChange: (v: string) => void
+  'aria-label'?: string
+}) {
   return (
     <div className="flex items-center rounded-[12px] border border-line bg-paper px-3">
       <span className="text-sm text-ink3">₩</span>
@@ -46,6 +54,7 @@ export function AmountInput({ value, onChange }: { value: string; onChange: (v: 
         onChange={(e) => onChange(e.target.value)}
         inputMode="numeric"
         placeholder="0"
+        aria-label={ariaLabel}
         className="tnum w-full bg-transparent px-2 py-2.5 text-right text-sm outline-none"
       />
     </div>
