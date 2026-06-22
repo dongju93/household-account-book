@@ -151,7 +151,7 @@ export function TransactionsPage() {
         }
       />
       <ScreenBody>
-        <div className="mb-2 flex flex-col gap-2">
+        <search className="mb-2 flex flex-col gap-2">
           <TextInput
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
@@ -177,7 +177,7 @@ export function TransactionsPage() {
                 </option>
               ))}
           </Select>
-        </div>
+        </search>
 
         {loading && <LoadingState />}
         {(listError || exportError) && (
