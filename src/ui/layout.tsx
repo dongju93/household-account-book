@@ -36,14 +36,18 @@ export function AppBar({
   return (
     <header className="flex h-[50px] flex-none items-center justify-between border-b border-line-soft bg-screen px-3.5">
       <div className="flex min-w-10 items-center gap-2">{left}</div>
-      <div
-        className={cn(
-          'flex-1 text-base font-bold text-ink',
-          center ? 'pl-1 text-left' : 'text-center',
-        )}
-      >
-        {title}
-      </div>
+      {title ? (
+        <h1
+          className={cn(
+            'flex-1 text-base font-bold text-ink',
+            center ? 'pl-1 text-left' : 'text-center',
+          )}
+        >
+          {title}
+        </h1>
+      ) : (
+        <div className="flex-1" />
+      )}
       <div className="flex min-w-10 items-center justify-end gap-2.5">{right}</div>
     </header>
   )

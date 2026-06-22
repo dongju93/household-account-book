@@ -25,7 +25,7 @@ export function SettingsSection({
   return (
     <section>
       <div className="mb-1.5 flex items-center justify-between px-0.5">
-        <span className="text-[12.5px] font-bold text-ink2">{title}</span>
+        <h2 className="text-[12.5px] font-bold text-ink2">{title}</h2>
         {canAdd && onAdd && (
           <button type="button" onClick={onAdd} className="text-xs font-bold text-ink">
             ＋ 추가

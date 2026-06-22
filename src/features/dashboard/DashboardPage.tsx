@@ -63,6 +63,7 @@ export function DashboardPage() {
   return (
     <>
       <AppBar
+        title={<span className="sr-only">대시보드</span>}
         left={
           <MonthNav
             value={ym}
