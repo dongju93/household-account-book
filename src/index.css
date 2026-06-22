@@ -1,5 +1,4 @@
-/* Fonts first (CSS requires @import before other rules), then Tailwind v4. */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+/* Font stylesheet is now loaded via <link> in index.html (see preconnect comment there). */
 @import 'tailwindcss';
 
 /*
