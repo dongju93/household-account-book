@@ -3,7 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom'
 
 import { useDocumentTitle } from '../../app/useDocumentTitle'
 import { useAuth } from '../../auth/useAuth'
-import { Button, ErrorBanner, Segmented, TextInput } from '../../ui'
+import { Button, ErrorBanner, PasswordInput, Segmented, TextInput } from '../../ui'
 
 type Mode = 'login' | 'signup'
 
@@ -78,9 +78,8 @@ export function LoginPage() {
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-semibold text-ink2">비밀번호</span>
-            <TextInput
+            <PasswordInput
               name="password"
-              type="password"
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               required
               minLength={6}
