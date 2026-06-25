@@ -1,3 +1,4 @@
+import { useDocumentTitle } from '../../app/useDocumentTitle'
 import { useAuth } from '../../auth/useAuth'
 import { useLedger } from '../../auth/useLedger'
 import { AppBar, Button, ErrorBanner, LoadingState, ScreenBody } from '../../ui'
@@ -6,6 +7,7 @@ import { GeneralSettings } from './GeneralSettings'
 import { RecurringManager } from './RecurringManager'
 
 export function SettingsPage() {
+  useDocumentTitle('설정')
   const { status, ledgerId, canManage, canEdit } = useLedger()
   const { signOut } = useAuth()
 

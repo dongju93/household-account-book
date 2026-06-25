@@ -1,6 +1,7 @@
 import { useActionState, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 
+import { useDocumentTitle } from '../../app/useDocumentTitle'
 import { useAuth } from '../../auth/useAuth'
 import { Button, ErrorBanner, Segmented, TextInput } from '../../ui'
 
@@ -12,6 +13,7 @@ interface FormState {
 }
 
 export function LoginPage() {
+  useDocumentTitle('로그인')
   const { status, signIn, signUp } = useAuth()
   const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>('login')

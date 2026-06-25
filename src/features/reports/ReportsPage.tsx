@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { useAsyncData } from '../../app/useAsyncData'
+import { useDocumentTitle } from '../../app/useDocumentTitle'
 import { useRefresh } from '../../app/useRefresh'
 import { useLedger } from '../../auth/useLedger'
 import { listCategories } from '../../data/categories'
@@ -18,6 +19,7 @@ import { ReportsCharts } from './ReportsCharts'
 const PERIODS = [3, 6, 12] as const
 
 export function ReportsPage() {
+  useDocumentTitle('통계')
   const { ledgerId } = useLedger()
   const { version } = useRefresh()
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>(6)

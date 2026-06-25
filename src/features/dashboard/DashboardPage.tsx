@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { useAsyncData } from '../../app/useAsyncData'
+import { useDocumentTitle } from '../../app/useDocumentTitle'
 import { useRefresh } from '../../app/useRefresh'
 import { useLedger } from '../../auth/useLedger'
 import { listCategories } from '../../data/categories'
@@ -22,6 +23,7 @@ import { SummaryCards } from './SummaryCards'
 const TREND_MONTHS = 6
 
 export function DashboardPage() {
+  useDocumentTitle('대시보드')
   const { ledgerId } = useLedger()
   const { version } = useRefresh()
   const [ym, setYm] = useState(currentYearMonth())

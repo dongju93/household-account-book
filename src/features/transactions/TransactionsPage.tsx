@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { useAsyncData } from '../../app/useAsyncData'
+import { useDocumentTitle } from '../../app/useDocumentTitle'
 import { useMaterializedMonth } from '../../app/useMaterializedMonth'
 import { usePaginatedList } from '../../app/usePaginatedList'
 import { useRefresh } from '../../app/useRefresh'
@@ -38,6 +39,7 @@ import { TransactionSheet } from './TransactionSheet'
 import { TxnRow } from './TxnRow'
 
 export function TransactionsPage() {
+  useDocumentTitle('내역')
   const { ledgerId } = useLedger()
   const { version, refresh } = useRefresh()
 
