@@ -49,3 +49,73 @@ body {
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.2px;
 }
+
+/*
+  BottomSheet slide-up enter/exit transition.
+
+  Animating a top-layer <dialog> requires three modern features working together:
+  - `@starting-style` defines the "enter-from" values (you cannot transition out
+    of display:none without it);
+  - `transition-behavior: allow-discrete` keeps the element painted through its
+    exit so `display` can flip to none only after the slide finishes;
+  - `overlay` must be in the transition list so the dialog stays in the top layer
+    while it slides out (Chromium-only today; elsewhere the exit degrades to an
+    instant hide, which is acceptable for this non-critical animation).
+*/
+.bottom-sheet {
+  translate: 0 100%;
+  transition:
+    translate 0.25s ease-out,
+    overlay 0.25s ease-out allow-discrete,
+    display 0.25s ease-out allow-discrete;
+}
+
+.bottom-sheet[open] {
+  translate: 0 0;
+}
+
+@starting-style {
+  .bottom-sheet[open] {
+    translate: 0 100%;
+  }
+}
+
+.bottom-sheet::backdrop {
+  background: transparent;
+  transition:
+    background 0.25s ease-out,
+    overlay 0.25s ease-out allow-discrete,
+    display 0.25s ease-out allow-discrete;
+}
+
+.bottom-sheet[open]::backdrop {
+  /* Matches the previous Tailwind `backdrop:bg-ink/30`. */
+  background: color-mix(in srgb, var(--color-ink) 30%, transparent);
+}
+
+@starting-style {
+  .bottom-sheet[open]::backdrop {
+    background: transparent;
+  }
+}
+
+/*
+  Respect the user's motion preference from day one (frontend-improvement-plan
+  #10): drop the slide entirely and shorten durations to a near-instant fade.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .bottom-sheet {
+    translate: 0 0;
+    transition-duration: 0.01s;
+  }
+
+  .bottom-sheet::backdrop {
+    transition-duration: 0.01s;
+  }
+
+  @starting-style {
+    .bottom-sheet[open] {
+      translate: 0 0;
+    }
+  }
+}

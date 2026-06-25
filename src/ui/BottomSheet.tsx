@@ -38,7 +38,7 @@ export function BottomSheet({
       onClick={(e) => {
         if (e.target === dialogRef.current) onClose()
       }}
-      className="fixed inset-x-0 top-auto bottom-0 m-0 w-full max-w-[480px] mx-auto rounded-t-[20px] border-0 bg-paper px-4 pt-3 pb-5 shadow-[0_-10px_30px_rgba(0,0,0,0.15)] backdrop:bg-ink/30"
+      className="bottom-sheet fixed inset-x-0 top-auto bottom-0 m-0 w-full max-w-[480px] mx-auto rounded-t-[20px] border-0 bg-paper px-4 pt-3 pb-5 shadow-[0_-10px_30px_rgba(0,0,0,0.15)]"
     >
       <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-fill3" />
       {title && (
