@@ -1,0 +1,15 @@
+diff --git a/dist/index.js b/dist/index.js
+index efc956418cc7ad9f0fc4e321474cbb5b66b0f02f..73fc168c4f6cd4abcb0c8d305809550876346360 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -8,8 +8,8 @@ function isBrowserEnvironment() {
+ 	return typeof window !== "undefined" && typeof window.navigator !== "undefined";
+ }
+ function readCurrentModelContext() {
+-	if (Object.getOwnPropertyDescriptor(navigator, "modelContext")) return navigator.modelContext;
+-	return document.modelContext ?? navigator.modelContext;
++	if (document.modelContext) return document.modelContext;
++	return Object.getOwnPropertyDescriptor(navigator, "modelContext") ? navigator.modelContext : void 0;
+ }
+ function replaceDocumentModelContext(value) {
+ 	try {

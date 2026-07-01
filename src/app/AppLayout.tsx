@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom'
 
 import { AddTransactionSheet } from '../features/transactions/AddTransactionSheet'
 import { AppShell, TabBar } from '../ui'
+import '../webmcp/registerWebMcpRuntime'
 import { useRefresh } from './useRefresh'
 
 // Authenticated shell: the page (via <Outlet/>) renders its own AppBar + body,

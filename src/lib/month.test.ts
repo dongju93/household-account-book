@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { addMonths, formatMonthLabel, monthKey, monthRange } from './month'
+import { addMonths, formatMonthLabel, monthKey, monthRange, parseMonthKey } from './month'
 
 describe('addMonths', () => {
   it('wraps across year boundaries in both directions', () => {
@@ -23,5 +23,22 @@ describe('month formatting', () => {
   it('zero-pads the month', () => {
     expect(monthKey(2026, 3)).toBe('2026-03')
     expect(formatMonthLabel({ year: 2026, month: 3 })).toBe('2026.03')
+  })
+})
+
+describe('parseMonthKey', () => {
+  it('parses a valid YYYY-MM string', () => {
+    expect(parseMonthKey('2026-06')).toEqual({ year: 2026, month: 6 })
+  })
+
+  it('returns null for malformed input', () => {
+    expect(parseMonthKey('2026-6')).toBeNull()
+    expect(parseMonthKey('2026/06')).toBeNull()
+    expect(parseMonthKey('not-a-month')).toBeNull()
+  })
+
+  it('returns null for an out-of-range month', () => {
+    expect(parseMonthKey('2026-00')).toBeNull()
+    expect(parseMonthKey('2026-13')).toBeNull()
   })
 })

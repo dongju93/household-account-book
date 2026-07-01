@@ -1,7 +1,7 @@
 import { won } from '../lib/format'
 import type { YearMonth } from '../lib/month'
 import { daysInCalendarMonth, dayOfMonthFromISO, monthKey, monthRange } from '../lib/month'
-import type { CategoryLike, TxnLike } from './types'
+import type { CategoryLike, ExpenseStatus, TxnLike } from './types'
 
 export interface BudgetPaceRow {
   categoryId: string
@@ -102,4 +102,32 @@ export function formatPaceHint(
 ): string {
   const daily = pace.remainingBudget <= 0 ? 0 : pace.dailyAllowance
   return `남은 ${pace.daysRemaining}일 · 하루 ${won(daily)}`
+}
+
+/**
+ * Pace-based status, distinct from the ratio-based `expenseStatus`: a category
+ * at 70% of budget can still be 주의 if few days remain, while one at 89% can
+ * be 정상 if plenty of days remain.
+ */
+export function budgetPaceStatus(row: BudgetPaceRow, ym: YearMonth): ExpenseStatus {
+  if (row.remainingBudget <= 0) return '초과'
+  const idealDaily = row.budget / daysInCalendarMonth(ym.year, ym.month)
+  if (row.dailyAllowance < idealDaily * 0.5) return '주의'
+  return '정상'
+}
+
+export interface BudgetPaceRowWithStatus extends BudgetPaceRow {
+  status: ExpenseStatus
+}
+
+const PACE_RISK_RANK: Record<ExpenseStatus, number> = { 초과: 0, 주의: 1, 정상: 2 }
+
+/** Attach `budgetPaceStatus` and sort riskiest-first (used by the WebMCP briefing tools). */
+export function budgetPaceRowsWithStatus(
+  rows: readonly BudgetPaceRow[],
+  ym: YearMonth,
+): BudgetPaceRowWithStatus[] {
+  return rows
+    .map((row) => ({ ...row, status: budgetPaceStatus(row, ym) }))
+    .sort((a, b) => PACE_RISK_RANK[a.status] - PACE_RISK_RANK[b.status])
 }
