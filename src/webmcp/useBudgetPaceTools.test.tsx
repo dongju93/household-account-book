@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { RefreshContext } from '../app/refreshContext'
 import { LedgerContext, type LedgerValue } from '../auth/ledgerContext'
 import type { Category, Transaction } from '../domain/types'
-import { currentYearMonth, todayISO } from '../lib/month'
+import { todayISO } from '../lib/month'
 import '../webmcp/registerWebMcpRuntime'
 
 vi.mock('../data/categories', () => ({ listCategories: vi.fn() }))
@@ -151,7 +151,6 @@ describe('useBudgetPaceTools', () => {
         expect.objectContaining({ name: '교통비', status: '정상' }),
       ],
     })
-    expect(mockedMaterialize).toHaveBeenCalledWith('ledger-1', currentYearMonth())
   })
 
   it('budget_pace_overview omits categories and adds a note for a past month', async () => {

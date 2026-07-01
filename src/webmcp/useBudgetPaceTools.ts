@@ -3,7 +3,7 @@ import { useWebMCP } from '@mcp-b/react-webmcp'
 import { useRefresh } from '../app/useRefresh'
 import { useLedger } from '../auth/useLedger'
 import { listCategories } from '../data/categories'
-import { fetchTransactionsInRange, materializeMonth } from '../data/summary'
+import { fetchTransactionsInRange } from '../data/summary'
 import {
   type BudgetPaceRowWithStatus,
   budgetPaceRowsWithStatus,
@@ -138,7 +138,6 @@ async function loadOverview(
   if ('error' in resolved) return { ready: false, reason: resolved.error }
   const { ym } = resolved
 
-  await materializeMonth(ledgerId, ym)
   const range = monthRange(ym.year, ym.month)
   const [txns, categories] = await Promise.all([
     fetchTransactionsInRange(ledgerId, range.start, range.endExclusive),
@@ -184,7 +183,6 @@ async function loadCategory(
     return { ready: true, matched: false, note: PAST_MONTH_NOTE }
   }
 
-  await materializeMonth(ledgerId, ym)
   const range = monthRange(ym.year, ym.month)
   const [txns, categories] = await Promise.all([
     fetchTransactionsInRange(ledgerId, range.start, range.endExclusive),
