@@ -16,6 +16,7 @@ import {
 } from '../../domain/reports'
 import { addMonths, currentYearMonth, monthRange, todayISO } from '../../lib/month'
 import { AppBar, ErrorBanner, LoadingState, MonthNav, ScreenBody } from '../../ui'
+import { useBudgetPaceTools } from '../../webmcp/useBudgetPaceTools'
 import { AchievementList } from './AchievementList'
 import { DashboardCharts } from './DashboardCharts'
 import { SummaryCards } from './SummaryCards'
@@ -24,6 +25,7 @@ const TREND_MONTHS = 6
 
 export function DashboardPage() {
   useDocumentTitle('대시보드')
+  useBudgetPaceTools()
   const { ledgerId } = useLedger()
   const { version } = useRefresh()
   const [ym, setYm] = useState(currentYearMonth())

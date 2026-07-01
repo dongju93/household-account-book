@@ -16,6 +16,15 @@ export function monthKey(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, '0')}`
 }
 
+/** Parses a 'YYYY-MM' string into a YearMonth, or null if malformed / out of range. */
+export function parseMonthKey(month: string): YearMonth | null {
+  const match = /^(\d{4})-(\d{2})$/.exec(month)
+  if (!match) return null
+  const parsedMonth = Number(match[2])
+  if (parsedMonth < 1 || parsedMonth > 12) return null
+  return { year: Number(match[1]), month: parsedMonth }
+}
+
 export function monthRange(year: number, month: number): MonthRange {
   const start = `${monthKey(year, month)}-01`
   const next = addMonths({ year, month }, 1)
