@@ -1,6 +1,8 @@
 // Cross-tool constants and helpers shared by the budget_pace_* / qna_* hooks.
-// Every tool in this app is read-only by design (feat/ai phase 1), so the
-// annotation object lives here to keep that guarantee in one place.
+// Those tools are read-only by design (feat/ai phase 1), so the annotation
+// object lives here to keep that guarantee in one place. month_close_review
+// is the one tool that writes (see MONTH_CLOSE_ANNOTATIONS in
+// useMonthCloseTools.ts) and deliberately does not use this constant.
 
 export const READ_ONLY_ANNOTATIONS = { readOnlyHint: true, idempotentHint: true } as const
 

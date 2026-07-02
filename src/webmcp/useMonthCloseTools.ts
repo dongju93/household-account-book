@@ -14,7 +14,7 @@ import {
   parseMonthKey,
   type YearMonth,
 } from '../lib/month'
-import { NOT_READY_REASON, READ_ONLY_ANNOTATIONS } from './shared'
+import { NOT_READY_REASON } from './shared'
 
 const MONTH_INPUT_PROPERTY = {
   type: 'string',
@@ -85,6 +85,19 @@ const OUTPUT_SCHEMA = {
 } as const
 
 const INVALID_MONTH_REASON = 'month 형식이 올바르지 않습니다 (YYYY-MM).'
+
+/**
+ * Unlike every other tool in `src/webmcp/`, this one is NOT read-only: its
+ * handler calls `materializeMonth`, which can insert rows into `transactions`
+ * (see `loadMonthCloseReview` below). Do not spread the shared
+ * `READ_ONLY_ANNOTATIONS` here — `readOnlyHint: true` is a signal MCP clients
+ * use to decide whether a tool call needs user confirmation, and claiming it
+ * for a tool that writes would let an agent silently materialize recurring
+ * transactions for a month the user never asked to open. `idempotentHint`
+ * still holds: `materialize_recurring` no-ops via a unique index on repeat
+ * calls for the same month.
+ */
+const MONTH_CLOSE_ANNOTATIONS = { readOnlyHint: false, idempotentHint: true } as const
 
 function resolveReviewMonth(monthInput: string | undefined): { ym: YearMonth } | { error: string } {
   if (!monthInput) return { ym: addMonths(currentYearMonth(), -1) }
@@ -159,10 +172,11 @@ async function loadMonthCloseReview(
 }
 
 /**
- * Registers the single read-only month-close-review WebMCP tool. Mounted in
+ * Registers the single month-close-review WebMCP tool. Mounted in
  * `AppLayout` (once `ledgerId` is resolved) rather than any one screen — it
  * fetches on demand for whatever month is asked, so no screen's render cycle
- * needs to be the one loading its data.
+ * needs to be the one loading its data. Not read-only, see
+ * `MONTH_CLOSE_ANNOTATIONS` above.
  */
 export function useMonthCloseTools(): void {
   const { ledgerId } = useLedger()
@@ -174,7 +188,7 @@ export function useMonthCloseTools(): void {
         '지정한 달(기본: 지난달)의 마감 점검 결과를 확인 필요(needsCheck) / 참고(forReference)로 분류해 반환한다. "이상 없음" 항목은 개수만 요약한다(noIssueSummary). 각 항목의 nav에 월·카테고리·메모 검색 힌트를 포함해, 거래 내역 화면에서 바로 찾아볼 수 있게 한다.',
       inputSchema: INPUT_SCHEMA,
       outputSchema: OUTPUT_SCHEMA,
-      annotations: { title: '월 마감 점검', ...READ_ONLY_ANNOTATIONS },
+      annotations: { title: '월 마감 점검', ...MONTH_CLOSE_ANNOTATIONS },
       handler: (input) => loadMonthCloseReview(ledgerId, input.month),
     },
     [ledgerId],
