@@ -11,6 +11,7 @@
 - **고정 항목** — 월급, 월세, 구독료처럼 매달 반복되는 항목을 등록해 두면 해당 월을 열 때 거래로 반영됩니다.
 - **엑셀보내기** — 거래 내역 화면에서 현재 필터(월·구분·카테고리·메모)에 맞는 내역을 `.xlsx` 파일로 받을 수 있습니다.
 - **통계 보기** — 최근 3·6·12개월 추이와 카테고리별 지출을 차트로 비교합니다.
+- **AI 브라우저 에이전트 연동** — 여러 화면에서 자연어 질문에 답하는 읽기 전용 WebMCP 도구가 열립니다. 대시보드에서는 "이번 달 식비 하루 얼마 남았어?"처럼 예산 페이스를, 통계 화면에서는 "요즘 식비 얼마나 쓰고 있어?"처럼 월별 추이·카테고리별 지출·전월 대비 증감을 물을 수 있고, 화면과 무관하게 지난달 마감 점검(빠진 고정 항목, 중복 의심 거래, 메모 없는 큰 지출, 예산 초과, 목표 미달)도 요청할 수 있습니다. 브라우저 자체의 AI 에이전트(Chrome의 Gemini 등, WebMCP 지원 브라우저)가 답변하며, 앱 안에 별도 챗봇 UI가 있는 것은 아닙니다.
 
 ## 자금 구분
 
@@ -61,6 +62,7 @@
 
 - **Frontend**: React 19, TypeScript, Vite, React Router, Tailwind CSS, Recharts
 - **Backend/Data**: Supabase Auth, Postgres, Row Level Security, RPC
+- **AI 연동**: WebMCP (`@mcp-b/global`, `@mcp-b/react-webmcp`) — 브라우저 AI 에이전트에 노출하는 읽기 전용 도구
 - **Tooling**: pnpm, Vite+ (Vitest, Oxlint, Oxfmt), Testing Library
 
 ## 로컬 실행
