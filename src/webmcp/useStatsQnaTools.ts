@@ -15,7 +15,7 @@ import {
   REPORT_PERIODS,
   type ReportPeriodMonths,
 } from '../domain/reports'
-import { currentYearMonth, lastMonths, monthRange } from '../lib/month'
+import { currentYearMonth, lastMonths, monthWindowRange } from '../lib/month'
 import { NOT_READY_REASON, READ_ONLY_ANNOTATIONS, resolveCategoryByName } from './shared'
 
 const PERIOD_INPUT_PROPERTY = {
@@ -160,15 +160,17 @@ const COMPARE_OUTPUT_SCHEMA = {
 
 /**
  * Fetch the window's transactions + categories exactly like ReportsPage does
- * (same lastMonths/monthRange arithmetic). Deliberately does NOT materialize —
- * read-only tools must not write rows; the hosting screen already materialized
- * its window before these tools became callable.
+ * (same lastMonths/monthWindowRange arithmetic). Deliberately does NOT
+ * materialize — read-only tools must not write rows. Correctness rests on two
+ * guarantees the hosting screen provides: it materializes the MAX period window
+ * (so any periodMonths ∈ REPORT_PERIODS is already covered), and it only reports
+ * `ready` once that materialization has resolved (so callers never read a
+ * half-materialized window).
  */
 async function loadPeriodData(ledgerId: string, periodMonths: number) {
-  const months = lastMonths(currentYearMonth(), periodMonths)
-  const start = monthRange(months[0].year, months[0].month).start
-  const last = months[months.length - 1]
-  const endExclusive = monthRange(last.year, last.month).endExclusive
+  const anchor = currentYearMonth()
+  const months = lastMonths(anchor, periodMonths)
+  const { start, endExclusive } = monthWindowRange(anchor, periodMonths)
   const [txns, categories] = await Promise.all([
     fetchTransactionsInRange(ledgerId, start, endExclusive),
     listCategories(ledgerId),
@@ -187,9 +189,10 @@ interface MonthlyTrendOutput {
 
 async function loadMonthlyTrend(
   ledgerId: string | null,
+  ready: boolean,
   periodMonths: number,
 ): Promise<MonthlyTrendOutput> {
-  if (!ledgerId) return { ready: false, reason: NOT_READY_REASON }
+  if (!ledgerId || !ready) return { ready: false, reason: NOT_READY_REASON }
 
   const { months, txns, categories } = await loadPeriodData(ledgerId, periodMonths)
   const byMonth = groupTransactionsByMonth(months, txns)
@@ -218,10 +221,11 @@ interface CategoryDetailOutput {
 
 async function loadCategoryDetail(
   ledgerId: string | null,
+  ready: boolean,
   categoryName: string,
   periodMonths: number,
 ): Promise<CategoryDetailOutput> {
-  if (!ledgerId) return { ready: false, reason: NOT_READY_REASON, matched: false }
+  if (!ledgerId || !ready) return { ready: false, reason: NOT_READY_REASON, matched: false }
 
   const { months, txns, categories } = await loadPeriodData(ledgerId, periodMonths)
   // Match against ALL categories (including inactive), mirroring ReportsPage —
@@ -254,12 +258,15 @@ interface ComparePeriodsOutput {
   deltas?: { income: number; expense: number; saving: number; investment: number; balance: number }
 }
 
-async function loadComparePeriods(ledgerId: string | null): Promise<ComparePeriodsOutput> {
-  if (!ledgerId) return { ready: false, reason: NOT_READY_REASON }
+async function loadComparePeriods(
+  ledgerId: string | null,
+  ready: boolean,
+): Promise<ComparePeriodsOutput> {
+  if (!ledgerId || !ready) return { ready: false, reason: NOT_READY_REASON }
 
-  const months = lastMonths(currentYearMonth(), 2)
-  const start = monthRange(months[0].year, months[0].month).start
-  const endExclusive = monthRange(months[1].year, months[1].month).endExclusive
+  const anchor = currentYearMonth()
+  const months = lastMonths(anchor, 2)
+  const { start, endExclusive } = monthWindowRange(anchor, 2)
   const txns = await fetchTransactionsInRange(ledgerId, start, endExclusive)
 
   // groupTransactionsByMonth seeds both keys, so both points always exist.
@@ -283,8 +290,12 @@ async function loadComparePeriods(ledgerId: string | null): Promise<ComparePerio
  * `ReportsPage`: the tools answer over the same period window the screen shows,
  * so `period` (the selected 3/6/12 chip) doubles as the default when the agent
  * omits `periodMonths` — keeping "data on screen = data the tool answers with".
+ *
+ * `ready` is the screen's "max window materialized for the current
+ * (ledgerId, version)" signal; while it is false every tool returns
+ * `{ ready: false }` instead of reading a not-yet-materialized window.
  */
-export function useStatsQnaTools(period: ReportPeriodMonths): void {
+export function useStatsQnaTools(period: ReportPeriodMonths, ready: boolean): void {
   const { ledgerId } = useLedger()
   const { version } = useRefresh()
 
@@ -296,9 +307,9 @@ export function useStatsQnaTools(period: ReportPeriodMonths): void {
       inputSchema: TREND_INPUT_SCHEMA,
       outputSchema: TREND_OUTPUT_SCHEMA,
       annotations: { title: '월별 추이 요약', ...READ_ONLY_ANNOTATIONS },
-      handler: (input) => loadMonthlyTrend(ledgerId, input.periodMonths ?? period),
+      handler: (input) => loadMonthlyTrend(ledgerId, ready, input.periodMonths ?? period),
     },
-    [ledgerId, period, version],
+    [ledgerId, ready, period, version],
   )
 
   useWebMCP(
@@ -310,9 +321,9 @@ export function useStatsQnaTools(period: ReportPeriodMonths): void {
       outputSchema: CATEGORY_DETAIL_OUTPUT_SCHEMA,
       annotations: { title: '카테고리별 추이 조회', ...READ_ONLY_ANNOTATIONS },
       handler: (input) =>
-        loadCategoryDetail(ledgerId, input.categoryName, input.periodMonths ?? period),
+        loadCategoryDetail(ledgerId, ready, input.categoryName, input.periodMonths ?? period),
     },
-    [ledgerId, period, version],
+    [ledgerId, ready, period, version],
   )
 
   useWebMCP(
@@ -323,8 +334,8 @@ export function useStatsQnaTools(period: ReportPeriodMonths): void {
       inputSchema: COMPARE_INPUT_SCHEMA,
       outputSchema: COMPARE_OUTPUT_SCHEMA,
       annotations: { title: '이번 달 vs 지난달 비교', ...READ_ONLY_ANNOTATIONS },
-      handler: () => loadComparePeriods(ledgerId),
+      handler: () => loadComparePeriods(ledgerId, ready),
     },
-    [ledgerId, version],
+    [ledgerId, ready, version],
   )
 }

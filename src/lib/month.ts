@@ -46,6 +46,20 @@ export function lastMonths(anchor: YearMonth, count: number): YearMonth[] {
   return Array.from({ length: count }, (_, i) => addMonths(anchor, -(count - 1 - i)))
 }
 
+/**
+ * The single MonthRange spanning the `count` months ending at `anchor`
+ * (inclusive) — i.e. `[first-of-window, first-of-month-after-anchor)`. Collapses
+ * the repeated `monthRange(window[0]).start` + `monthRange(anchor).endExclusive`
+ * boilerplate that ReportsPage and the qna_* tools each hand-rolled.
+ */
+export function monthWindowRange(anchor: YearMonth, count: number): MonthRange {
+  const first = addMonths(anchor, -(count - 1))
+  return {
+    start: monthRange(first.year, first.month).start,
+    endExclusive: monthRange(anchor.year, anchor.month).endExclusive,
+  }
+}
+
 /** Display label "2026.06". */
 export function formatMonthLabel(ym: YearMonth): string {
   return `${ym.year}.${String(ym.month).padStart(2, '0')}`

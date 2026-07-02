@@ -14,32 +14,42 @@ import {
   REPORT_PERIODS,
   type ReportPeriodMonths,
 } from '../../domain/reports'
-import { currentYearMonth, lastMonths, monthRange } from '../../lib/month'
+import { currentYearMonth, lastMonths, monthWindowRange } from '../../lib/month'
 import { AppBar, Chip, ErrorBanner, LoadingState, ScreenBody } from '../../ui'
 import { useStatsQnaTools } from '../../webmcp/useStatsQnaTools'
 import { ReportsCharts } from './ReportsCharts'
+
+// Widest window any qna_* tool can be asked for (periodMonths enum = REPORT_PERIODS).
+const MATERIALIZE_MONTHS = REPORT_PERIODS[REPORT_PERIODS.length - 1]
 
 export function ReportsPage() {
   useDocumentTitle('통계')
   const { ledgerId } = useLedger()
   const { version } = useRefresh()
   const [period, setPeriod] = useState<ReportPeriodMonths>(6)
-  useStatsQnaTools(period)
 
   const anchor = currentYearMonth()
   const months = lastMonths(anchor, period)
-  const start = monthRange(months[0].year, months[0].month).start
-  const endExclusive = monthRange(anchor.year, anchor.month).endExclusive
+  const { start, endExclusive } = monthWindowRange(anchor, period)
 
   const { data, loading, error } = useAsyncData(async () => {
     if (!ledgerId) return null
-    await materializeMonths(ledgerId, months)
+    // Materialize the MAX window (not just the displayed `period`) so the qna_*
+    // tools can safely answer any periodMonths without reading un-materialized
+    // recurring rows; the display fetch below stays scoped to `period`.
+    await materializeMonths(ledgerId, lastMonths(anchor, MATERIALIZE_MONTHS))
     const [txns, categories] = await Promise.all([
       fetchTransactionsInRange(ledgerId, start, endExclusive),
       listCategories(ledgerId),
     ])
     return { txns, categories }
   }, [ledgerId, period, version])
+
+  // Gate the qna_* tools until this screen has finished materializing the max
+  // window for the current (ledgerId, version); closes the mount-time race where
+  // tools are exposed synchronously before the async materialize resolves.
+  const ready = !loading && !error && data != null
+  useStatsQnaTools(period, ready)
 
   const txns = data?.txns ?? []
   const categories = data?.categories ?? []

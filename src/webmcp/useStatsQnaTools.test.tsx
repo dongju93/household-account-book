@@ -108,7 +108,7 @@ async function callTool(name: string, args: Record<string, unknown>) {
   return response
 }
 
-function renderTools(ledgerId: string | null, period: 3 | 6 | 12 = 6) {
+function renderTools(ledgerId: string | null, period: 3 | 6 | 12 = 6, ready = true) {
   const ledgerValue: LedgerValue = {
     status: ledgerId ? 'ready' : 'loading',
     ledgerId,
@@ -118,7 +118,7 @@ function renderTools(ledgerId: string | null, period: 3 | 6 | 12 = 6) {
     canManage: true,
     reload: () => {},
   }
-  return renderHook(() => useStatsQnaTools(period), {
+  return renderHook(() => useStatsQnaTools(period, ready), {
     wrapper: ({ children }) => (
       <LedgerContext.Provider value={ledgerValue}>
         <RefreshContext.Provider value={{ version: 0, refresh: () => {} }}>
@@ -193,6 +193,20 @@ describe('useStatsQnaTools', () => {
 
     expect(response.structuredContent).toMatchObject({ ready: false })
     expect(mockedFetchTxns).not.toHaveBeenCalled()
+  })
+
+  it('gates every tool on the screen readiness flag before its window is materialized', async () => {
+    renderTools('ledger-1', 6, false)
+
+    const trend = await callTool('qna_monthly_trend', {})
+    const detail = await callTool('qna_category_detail', { categoryName: '식비' })
+    const compare = await callTool('qna_compare_periods', {})
+
+    expect(trend.structuredContent).toMatchObject({ ready: false })
+    expect(detail.structuredContent).toMatchObject({ ready: false, matched: false })
+    expect(compare.structuredContent).toMatchObject({ ready: false })
+    expect(mockedFetchTxns).not.toHaveBeenCalled()
+    expect(mockedListCategories).not.toHaveBeenCalled()
   })
 
   it('never materializes months (read-only tools must not write)', async () => {
