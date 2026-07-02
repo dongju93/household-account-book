@@ -11,21 +11,23 @@ import {
   groupTransactionsByMonth,
   monthlyCategoryStacks,
   monthlyTrend,
+  REPORT_PERIODS,
+  type ReportPeriodMonths,
 } from '../../domain/reports'
-import { addMonths, currentYearMonth, monthRange } from '../../lib/month'
+import { currentYearMonth, lastMonths, monthRange } from '../../lib/month'
 import { AppBar, Chip, ErrorBanner, LoadingState, ScreenBody } from '../../ui'
+import { useStatsQnaTools } from '../../webmcp/useStatsQnaTools'
 import { ReportsCharts } from './ReportsCharts'
-
-const PERIODS = [3, 6, 12] as const
 
 export function ReportsPage() {
   useDocumentTitle('통계')
   const { ledgerId } = useLedger()
   const { version } = useRefresh()
-  const [period, setPeriod] = useState<(typeof PERIODS)[number]>(6)
+  const [period, setPeriod] = useState<ReportPeriodMonths>(6)
+  useStatsQnaTools(period)
 
   const anchor = currentYearMonth()
-  const months = Array.from({ length: period }, (_, i) => addMonths(anchor, -(period - 1 - i)))
+  const months = lastMonths(anchor, period)
   const start = monthRange(months[0].year, months[0].month).start
   const endExclusive = monthRange(anchor.year, anchor.month).endExclusive
 
@@ -53,7 +55,7 @@ export function ReportsPage() {
       <AppBar title="통계" center />
       <ScreenBody className="flex flex-col gap-3.5">
         <div className="flex gap-1.5">
-          {PERIODS.map((p) => (
+          {REPORT_PERIODS.map((p) => (
             <Chip key={p} active={period === p} onClick={() => setPeriod(p)}>
               {p}개월
             </Chip>

@@ -3,6 +3,11 @@ import { monthKey } from '../lib/month'
 import { computeMonthSummary, type MonthSummary } from './monthSummary'
 import type { CategoryLike, Transaction, TxnLike } from './types'
 
+/** Selectable trend windows — shared by the 통계 screen chips and the qna_* tool schemas. */
+export const REPORT_PERIODS = [3, 6, 12] as const
+
+export type ReportPeriodMonths = (typeof REPORT_PERIODS)[number]
+
 /** Short month label for chart axes, e.g. "06월". */
 export function monthTrendLabel(month: string): string {
   return `${Number(month.slice(5, 7))}월`
@@ -70,6 +75,67 @@ export function categoryExpenseBreakdown(
     })
   }
   return rows.sort((a, b) => b.amount - a.amount)
+}
+
+export interface CategoryDeltaRow {
+  categoryId: string
+  name: string
+  latestAmount: number
+  previousAmount: number
+  delta: number // latestAmount - previousAmount
+  deltaPct: number // vs previousAmount; a category appearing from 0 reads as +100
+}
+
+/**
+ * 카테고리별 지출 증감 — compares the LAST TWO months of the window by
+ * recombining categoryExpenseBreakdown per month and joining on category id,
+ * sorted by biggest increase first. Divide-by-zero follows the pctOf guard
+ * (achievement.ts): previousAmount 0 yields ±100/0, never Infinity/NaN.
+ */
+export function categoryMonthOverMonthDeltas(
+  categories: readonly CategoryLike[],
+  txnsByMonth: ReadonlyMap<string, readonly TxnLike[]>,
+): CategoryDeltaRow[] {
+  const months = [...txnsByMonth.keys()].sort()
+  if (months.length === 0) return []
+
+  const latest = categoryExpenseBreakdown(categories, txnsByMonth.get(months.at(-1)!) ?? [])
+  const previous =
+    months.length > 1
+      ? categoryExpenseBreakdown(categories, txnsByMonth.get(months.at(-2)!) ?? [])
+      : []
+  const previousByCat = new Map(previous.map((r) => [r.categoryId, r.amount]))
+
+  const rows: CategoryDeltaRow[] = latest.map((r) => {
+    const previousAmount = previousByCat.get(r.categoryId) ?? 0
+    const delta = r.amount - previousAmount
+    return {
+      categoryId: r.categoryId,
+      name: r.name,
+      latestAmount: r.amount,
+      previousAmount,
+      delta,
+      deltaPct:
+        previousAmount > 0 ? Math.round((delta / previousAmount) * 100) : r.amount > 0 ? 100 : 0,
+    }
+  })
+
+  // Categories with spend last month but none this month still matter to the
+  // "what changed" question — surface them as full decreases.
+  const latestIds = new Set(latest.map((r) => r.categoryId))
+  for (const r of previous) {
+    if (latestIds.has(r.categoryId)) continue
+    rows.push({
+      categoryId: r.categoryId,
+      name: r.name,
+      latestAmount: 0,
+      previousAmount: r.amount,
+      delta: -r.amount,
+      deltaPct: -100,
+    })
+  }
+
+  return rows.sort((a, b) => b.delta - a.delta)
 }
 
 export interface CategoryStackSeries {

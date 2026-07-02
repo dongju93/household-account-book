@@ -41,6 +41,11 @@ export function currentYearMonth(): YearMonth {
   return { year: d.getFullYear(), month: d.getMonth() + 1 }
 }
 
+/** The `count` months ending at `anchor` (inclusive), ascending. */
+export function lastMonths(anchor: YearMonth, count: number): YearMonth[] {
+  return Array.from({ length: count }, (_, i) => addMonths(anchor, -(count - 1 - i)))
+}
+
 /** Display label "2026.06". */
 export function formatMonthLabel(ym: YearMonth): string {
   return `${ym.year}.${String(ym.month).padStart(2, '0')}`
