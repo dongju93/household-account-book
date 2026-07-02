@@ -11,33 +11,45 @@ import {
   groupTransactionsByMonth,
   monthlyCategoryStacks,
   monthlyTrend,
+  REPORT_PERIODS,
+  type ReportPeriodMonths,
 } from '../../domain/reports'
-import { addMonths, currentYearMonth, monthRange } from '../../lib/month'
+import { currentYearMonth, lastMonths, monthWindowRange } from '../../lib/month'
 import { AppBar, Chip, ErrorBanner, LoadingState, ScreenBody } from '../../ui'
+import { useStatsQnaTools } from '../../webmcp/useStatsQnaTools'
 import { ReportsCharts } from './ReportsCharts'
 
-const PERIODS = [3, 6, 12] as const
+// Widest window any qna_* tool can be asked for (periodMonths enum = REPORT_PERIODS).
+const MATERIALIZE_MONTHS = REPORT_PERIODS[REPORT_PERIODS.length - 1]
 
 export function ReportsPage() {
   useDocumentTitle('통계')
   const { ledgerId } = useLedger()
   const { version } = useRefresh()
-  const [period, setPeriod] = useState<(typeof PERIODS)[number]>(6)
+  const [period, setPeriod] = useState<ReportPeriodMonths>(6)
 
   const anchor = currentYearMonth()
-  const months = Array.from({ length: period }, (_, i) => addMonths(anchor, -(period - 1 - i)))
-  const start = monthRange(months[0].year, months[0].month).start
-  const endExclusive = monthRange(anchor.year, anchor.month).endExclusive
+  const months = lastMonths(anchor, period)
+  const { start, endExclusive } = monthWindowRange(anchor, period)
 
   const { data, loading, error } = useAsyncData(async () => {
     if (!ledgerId) return null
-    await materializeMonths(ledgerId, months)
+    // Materialize the MAX window (not just the displayed `period`) so the qna_*
+    // tools can safely answer any periodMonths without reading un-materialized
+    // recurring rows; the display fetch below stays scoped to `period`.
+    await materializeMonths(ledgerId, lastMonths(anchor, MATERIALIZE_MONTHS))
     const [txns, categories] = await Promise.all([
       fetchTransactionsInRange(ledgerId, start, endExclusive),
       listCategories(ledgerId),
     ])
     return { txns, categories }
   }, [ledgerId, period, version])
+
+  // Gate the qna_* tools until this screen has finished materializing the max
+  // window for the current (ledgerId, version); closes the mount-time race where
+  // tools are exposed synchronously before the async materialize resolves.
+  const ready = !loading && !error && data != null
+  useStatsQnaTools(period, ready)
 
   const txns = data?.txns ?? []
   const categories = data?.categories ?? []
@@ -53,7 +65,7 @@ export function ReportsPage() {
       <AppBar title="통계" center />
       <ScreenBody className="flex flex-col gap-3.5">
         <div className="flex gap-1.5">
-          {PERIODS.map((p) => (
+          {REPORT_PERIODS.map((p) => (
             <Chip key={p} active={period === p} onClick={() => setPeriod(p)}>
               {p}개월
             </Chip>

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test'
 
 import { computeMonthSummary } from './monthSummary'
-import { categoryExpenseBreakdown, monthlyCategoryStacks, monthlyTrend } from './reports'
+import {
+  categoryExpenseBreakdown,
+  categoryMonthOverMonthDeltas,
+  monthlyCategoryStacks,
+  monthlyTrend,
+} from './reports'
 import type { CategoryLike, TxnLike } from './types'
 
 const fixture: TxnLike[] = [
@@ -50,6 +55,94 @@ describe('categoryExpenseBreakdown', () => {
     expect(
       categoryExpenseBreakdown(cats, [{ type: 'income', amount: 100, categoryId: 'salary' }]),
     ).toEqual([])
+  })
+})
+
+describe('categoryMonthOverMonthDeltas', () => {
+  const cats: CategoryLike[] = [
+    { id: 'food', name: '식비', type: 'expense', budgetAmount: 500_000, goalAmount: null },
+    { id: 'bus', name: '교통', type: 'expense', budgetAmount: 200_000, goalAmount: null },
+    { id: 'shop', name: '쇼핑', type: 'expense', budgetAmount: 300_000, goalAmount: null },
+  ]
+
+  it('compares only the LAST two months and sorts by delta desc', () => {
+    const byMonth = new Map<string, TxnLike[]>([
+      // Earlier month must be ignored entirely.
+      ['2026-04', [{ type: 'expense', amount: 999_999, categoryId: 'shop' }]],
+      [
+        '2026-05',
+        [
+          { type: 'expense', amount: 100_000, categoryId: 'food' },
+          { type: 'expense', amount: 80_000, categoryId: 'bus' },
+        ],
+      ],
+      [
+        '2026-06',
+        [
+          { type: 'expense', amount: 150_000, categoryId: 'food' },
+          { type: 'expense', amount: 40_000, categoryId: 'bus' },
+          { type: 'income', amount: 3_000_000, categoryId: 'salary' },
+        ],
+      ],
+    ])
+    const rows = categoryMonthOverMonthDeltas(cats, byMonth)
+    expect(rows).toEqual([
+      {
+        categoryId: 'food',
+        name: '식비',
+        latestAmount: 150_000,
+        previousAmount: 100_000,
+        delta: 50_000,
+        deltaPct: 50,
+      },
+      {
+        categoryId: 'bus',
+        name: '교통',
+        latestAmount: 40_000,
+        previousAmount: 80_000,
+        delta: -40_000,
+        deltaPct: -50,
+      },
+    ])
+  })
+
+  it('reads a newly-appearing category as +100% (divide-by-zero guard)', () => {
+    const byMonth = new Map<string, TxnLike[]>([
+      ['2026-05', []],
+      ['2026-06', [{ type: 'expense', amount: 30_000, categoryId: 'shop' }]],
+    ])
+    const [row] = categoryMonthOverMonthDeltas(cats, byMonth)
+    expect(row).toMatchObject({
+      categoryId: 'shop',
+      previousAmount: 0,
+      delta: 30_000,
+      deltaPct: 100,
+    })
+  })
+
+  it('surfaces a vanished category as a full decrease', () => {
+    const byMonth = new Map<string, TxnLike[]>([
+      ['2026-05', [{ type: 'expense', amount: 30_000, categoryId: 'shop' }]],
+      ['2026-06', []],
+    ])
+    const [row] = categoryMonthOverMonthDeltas(cats, byMonth)
+    expect(row).toMatchObject({
+      categoryId: 'shop',
+      latestAmount: 0,
+      previousAmount: 30_000,
+      delta: -30_000,
+      deltaPct: -100,
+    })
+  })
+
+  it('treats a single-month window as all-new spending and an empty window as empty', () => {
+    const single = new Map<string, TxnLike[]>([
+      ['2026-06', [{ type: 'expense', amount: 10_000, categoryId: 'food' }]],
+    ])
+    expect(categoryMonthOverMonthDeltas(cats, single)).toEqual([
+      expect.objectContaining({ categoryId: 'food', previousAmount: 0, deltaPct: 100 }),
+    ])
+    expect(categoryMonthOverMonthDeltas(cats, new Map())).toEqual([])
   })
 })
 

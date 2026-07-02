@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { addMonths, formatMonthLabel, monthKey, monthRange, parseMonthKey } from './month'
+import {
+  addMonths,
+  formatMonthLabel,
+  monthKey,
+  monthRange,
+  monthWindowRange,
+  parseMonthKey,
+} from './month'
 
 describe('addMonths', () => {
   it('wraps across year boundaries in both directions', () => {
@@ -16,6 +23,30 @@ describe('monthRange (calendar month, exclusive end)', () => {
   })
   it('rolls the end into the next year for December', () => {
     expect(monthRange(2026, 12)).toEqual({ start: '2026-12-01', endExclusive: '2027-01-01' })
+  })
+})
+
+describe('monthWindowRange (window ending at anchor, inclusive)', () => {
+  it('spans the count months up to and including the anchor', () => {
+    expect(monthWindowRange({ year: 2026, month: 6 }, 3)).toEqual({
+      start: '2026-04-01',
+      endExclusive: '2026-07-01',
+    })
+  })
+  it('reaches back across a year boundary', () => {
+    expect(monthWindowRange({ year: 2026, month: 2 }, 6)).toEqual({
+      start: '2025-09-01',
+      endExclusive: '2026-03-01',
+    })
+  })
+  it('collapses to a single calendar month when count is 1', () => {
+    expect(monthWindowRange({ year: 2026, month: 6 }, 1)).toEqual(monthRange(2026, 6))
+  })
+  it('handles the full 12-month window', () => {
+    expect(monthWindowRange({ year: 2026, month: 6 }, 12)).toEqual({
+      start: '2025-07-01',
+      endExclusive: '2026-07-01',
+    })
   })
 })
 

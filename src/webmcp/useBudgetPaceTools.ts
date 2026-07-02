@@ -18,6 +18,7 @@ import {
   todayISO,
   type YearMonth,
 } from '../lib/month'
+import { NOT_READY_REASON, READ_ONLY_ANNOTATIONS, resolveCategoryByName } from './shared'
 
 const MONTH_INPUT_PROPERTY = {
   type: 'string',
@@ -107,9 +108,6 @@ const CATEGORY_OUTPUT_SCHEMA = {
   required: ['ready', 'matched'],
 } as const
 
-const READ_ONLY_ANNOTATIONS = { readOnlyHint: true, idempotentHint: true } as const
-
-const NOT_READY_REASON = '가계부 정보를 아직 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
 const INVALID_MONTH_REASON = 'month 형식이 올바르지 않습니다 (YYYY-MM).'
 const PAST_MONTH_NOTE = '과거 월은 예산 페이스를 제공하지 않습니다.'
 
@@ -190,13 +188,13 @@ async function loadCategory(
   ])
 
   const rows = budgetPaceRowsWithStatus(computeBudgetPaceRows(categories, txns, ym, todayISO()), ym)
-  const trimmed = categoryName.trim()
-  const matches = rows.filter((r) => r.name.includes(trimmed))
-
-  if (matches.length !== 1) {
-    return { ready: true, matched: false, candidates: matches.map((r) => r.name) }
+  const found = resolveCategoryByName(rows, categoryName)
+  if ('candidates' in found) {
+    return { ready: true, matched: false, candidates: found.candidates }
   }
-  return { ready: true, matched: true, category: matches[0] }
+  // `rows` is built from `listCategories(ledgerId, { activeOnly: true })`, and
+  // active names are unique per ledger, so a single-name match is always one row.
+  return { ready: true, matched: true, category: found.matches[0] }
 }
 
 /**
