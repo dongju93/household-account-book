@@ -192,7 +192,9 @@ async function loadCategory(
   if ('candidates' in found) {
     return { ready: true, matched: false, candidates: found.candidates }
   }
-  return { ready: true, matched: true, category: found.match }
+  // `rows` is built from `listCategories(ledgerId, { activeOnly: true })`, and
+  // active names are unique per ledger, so a single-name match is always one row.
+  return { ready: true, matched: true, category: found.matches[0] }
 }
 
 /**

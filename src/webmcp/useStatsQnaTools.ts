@@ -229,20 +229,27 @@ async function loadCategoryDetail(
 
   const { months, txns, categories } = await loadPeriodData(ledgerId, periodMonths)
   // Match against ALL categories (including inactive), mirroring ReportsPage —
-  // an archived category still owns its historical transactions.
+  // an archived category still owns its historical transactions. A rename or
+  // a deactivate/recreate cycle can leave several rows sharing one name
+  // (categories_unique_active_name only enforces uniqueness among active
+  // rows); resolveCategoryByName groups those together instead of reporting
+  // a false ambiguity the caller — restricted to a bare `categoryName` —
+  // could never resolve. Aggregate their transactions under one answer.
   const found = resolveCategoryByName(categories, categoryName)
   if ('candidates' in found) return { ready: true, matched: false, candidates: found.candidates }
 
+  const matchedIds = new Set(found.matches.map((c) => c.id))
+  const representative = found.matches.find((c) => c.isActive) ?? found.matches[0]
   const monthRows = [...groupTransactionsByMonth(months, txns)].map(([month, list]) => ({
     month,
-    amount: list.reduce((sum, t) => (t.categoryId === found.match.id ? sum + t.amount : sum), 0),
+    amount: list.reduce((sum, t) => (matchedIds.has(t.categoryId) ? sum + t.amount : sum), 0),
   }))
   return {
     ready: true,
     matched: true,
     category: {
-      categoryId: found.match.id,
-      name: found.match.name,
+      categoryId: representative.id,
+      name: representative.name,
       periodMonths,
       months: monthRows,
       totalAmount: monthRows.reduce((sum, r) => sum + r.amount, 0),

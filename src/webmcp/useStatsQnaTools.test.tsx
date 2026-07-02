@@ -252,6 +252,39 @@ describe('useStatsQnaTools', () => {
     })
   })
 
+  it('qna_category_detail aggregates a same-name inactive category instead of reporting false ambiguity', async () => {
+    // categories_unique_active_name only enforces uniqueness among active
+    // rows, so a rename/deactivate/recreate cycle can leave an inactive '식비'
+    // row alongside the active one. Both should be matched and their
+    // transactions summed together.
+    const archivedFood: Category = {
+      ...CATEGORIES[0],
+      id: 'food-archived',
+      isActive: false,
+    }
+    mockedListCategories.mockResolvedValue([...CATEGORIES, archivedFood])
+    mockedFetchTxns.mockResolvedValue([
+      ...TXNS,
+      txn('t6', 'food-archived', `${CURRENT_KEY}-15`, 'expense', 20_000),
+    ])
+    renderTools('ledger-1', 6)
+
+    const response = await callTool('qna_category_detail', { categoryName: '식비' })
+    const output = response.structuredContent as {
+      matched: boolean
+      candidates?: string[]
+      category: { categoryId: string; name: string; totalAmount: number }
+    }
+
+    expect(output.matched).toBe(true)
+    expect(output.candidates).toBeUndefined()
+    expect(output.category).toMatchObject({
+      categoryId: 'food',
+      name: '식비',
+      totalAmount: 270_000,
+    })
+  })
+
   it('qna_compare_periods returns both month summaries and raw deltas only', async () => {
     renderTools('ledger-1')
 
