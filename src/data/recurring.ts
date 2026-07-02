@@ -1,5 +1,7 @@
 import type { FundType } from '../domain/fundType'
 import type { RecurringItem } from '../domain/types'
+import type { YearMonth } from '../lib/month'
+import { monthKey } from '../lib/month'
 import { supabase } from '../lib/supabase'
 import { mapRecurring } from './mappers'
 
@@ -11,6 +13,20 @@ export async function listRecurring(ledgerId: string): Promise<RecurringItem[]> 
     .order('created_at', { ascending: true })
   if (error) throw error
   return (data ?? []).map(mapRecurring)
+}
+
+/** recurring_id set of items intentionally skipped for `ym` (see recurring_skips). */
+export async function listSkippedRecurringIds(
+  ledgerId: string,
+  ym: YearMonth,
+): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('recurring_skips')
+    .select('recurring_id')
+    .eq('ledger_id', ledgerId)
+    .eq('occurrence_month', `${monthKey(ym.year, ym.month)}-01`)
+  if (error) throw error
+  return new Set((data ?? []).map((r) => r.recurring_id as string))
 }
 
 export interface RecurringWrite {
