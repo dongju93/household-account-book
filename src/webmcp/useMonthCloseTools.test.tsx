@@ -1,11 +1,11 @@
-import type { ModelContextWithExtensions } from '@mcp-b/webmcp-types'
-import { act, renderHook } from '@testing-library/react'
+import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 import { LedgerContext, type LedgerValue } from '../auth/ledgerContext'
 import type { Category, RecurringItem, Transaction } from '../domain/types'
 import { addMonths, currentYearMonth, monthKey } from '../lib/month'
 import '../webmcp/registerWebMcpRuntime'
+import { callTool, registeredToolNames } from './testHelpers'
 
 vi.mock('../data/categories', () => ({ listCategories: vi.fn() }))
 vi.mock('../data/recurring', () => ({ listRecurring: vi.fn(), listSkippedRecurringIds: vi.fn() }))
@@ -105,19 +105,6 @@ const RECURRING: RecurringItem[] = [
   },
 ]
 
-function modelContext(): ModelContextWithExtensions {
-  return document.modelContext as unknown as ModelContextWithExtensions
-}
-
-async function callTool(name: string, args: Record<string, unknown>) {
-  let response: Awaited<ReturnType<ModelContextWithExtensions['callTool']>> | undefined
-  await act(async () => {
-    response = await modelContext().callTool({ name, arguments: args })
-  })
-  if (!response) throw new Error(`callTool("${name}") did not resolve`)
-  return response
-}
-
 function renderTools(ledgerId: string | null) {
   const ledgerValue: LedgerValue = {
     status: ledgerId ? 'ready' : 'loading',
@@ -145,11 +132,9 @@ beforeEach(() => {
 })
 
 describe('useMonthCloseTools', () => {
-  it('registers month_close_review on document.modelContext', () => {
+  it('registers month_close_review on document.modelContext', async () => {
     renderTools('ledger-1')
-    const names = modelContext()
-      .listTools()
-      .map((t) => t.name)
+    const names = await registeredToolNames()
     expect(names).toContain('month_close_review')
   })
 

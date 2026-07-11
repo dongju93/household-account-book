@@ -13,8 +13,8 @@
     "test:watch": "vp test watch"
   },
   "dependencies": {
-    "@mcp-b/global": "^3.0.0",
-    "@mcp-b/react-webmcp": "^3.0.0",
+    "@mcp-b/global": "^4.0.0",
+    "@mcp-b/react-webmcp": "^4.0.0",
     "@supabase/supabase-js": "^2.110.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
@@ -25,7 +25,7 @@
   },
   "devDependencies": {
     "@babel/core": "^8.0.1",
-    "@mcp-b/webmcp-types": "^3.0.0",
+    "@mcp-b/webmcp-types": "^4.0.0",
     "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/vite": "^4.3.2",
     "@testing-library/jest-dom": "^6.9.1",
@@ -40,7 +40,7 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4.3.2",
-    "typescript": "~6.0.3",
+    "typescript": "~7.0.2",
     "vite": "^8.1.1",
     "vite-plus": "^0.2.1",
     "vitest": "^4.1.9"

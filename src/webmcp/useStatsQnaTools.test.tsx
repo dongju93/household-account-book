@@ -1,5 +1,4 @@
-import type { ModelContextWithExtensions } from '@mcp-b/webmcp-types'
-import { act, renderHook } from '@testing-library/react'
+import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 import { RefreshContext } from '../app/refreshContext'
@@ -7,6 +6,7 @@ import { LedgerContext, type LedgerValue } from '../auth/ledgerContext'
 import type { Category, Transaction } from '../domain/types'
 import { addMonths, currentYearMonth, monthKey } from '../lib/month'
 import '../webmcp/registerWebMcpRuntime'
+import { callTool, registeredToolNames } from './testHelpers'
 
 vi.mock('../data/categories', () => ({ listCategories: vi.fn() }))
 vi.mock('../data/summary', () => ({
@@ -93,21 +93,6 @@ const TXNS: Transaction[] = [
   txn('t5', 'transport', `${PREVIOUS_KEY}-05`, 'expense', 80_000),
 ]
 
-// `document.modelContext`'s ambient type is the strict W3C `ModelContextCore`
-// surface; `listTools`/`callTool` are MCP-B runtime extensions on top of it.
-function modelContext(): ModelContextWithExtensions {
-  return document.modelContext as unknown as ModelContextWithExtensions
-}
-
-async function callTool(name: string, args: Record<string, unknown>) {
-  let response: Awaited<ReturnType<ModelContextWithExtensions['callTool']>> | undefined
-  await act(async () => {
-    response = await modelContext().callTool({ name, arguments: args })
-  })
-  if (!response) throw new Error(`callTool("${name}") did not resolve`)
-  return response
-}
-
 function renderTools(ledgerId: string | null, period: 3 | 6 | 12 = 6, ready = true) {
   const ledgerValue: LedgerValue = {
     status: ledgerId ? 'ready' : 'loading',
@@ -136,11 +121,9 @@ beforeEach(() => {
 })
 
 describe('useStatsQnaTools', () => {
-  it('registers the three qna tools on document.modelContext', () => {
+  it('registers the three qna tools on document.modelContext', async () => {
     renderTools('ledger-1')
-    const names = modelContext()
-      .listTools()
-      .map((t) => t.name)
+    const names = await registeredToolNames()
     expect(names).toEqual(
       expect.arrayContaining(['qna_monthly_trend', 'qna_category_detail', 'qna_compare_periods']),
     )

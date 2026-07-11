@@ -4,9 +4,10 @@
 // rather than from every tool-registration hook, keeps that init timing
 // obvious and guarantees it only runs once per app load.
 //
-// node_modules/@mcp-b/global is patched (patches/@mcp-b__global@3.0.0.patch):
-// upstream's init reads navigator.modelContext before document.modelContext,
-// which self-triggers a "navigator.modelContext is deprecated" warning from
+// node_modules/@mcp-b/global is patched (patches/@mcp-b__global@4.0.0.patch):
+// upstream's init still reads navigator.modelContext before document.modelContext
+// (Chrome 152 / v4 document-first alignment left this helper unchanged), which
+// self-triggers a "navigator.modelContext is deprecated" warning from
 // @mcp-b/webmcp-polyfill's own compat shim on every load. The patch just
 // swaps the check order to prefer document.modelContext (already installed
 // by that point), matching the WebMCP spec's post-PR-184 intent. Tracked
