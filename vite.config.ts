@@ -39,6 +39,10 @@ export default defineConfig({
     sortImports: true,
   },
   lint: {
+    // Deno Edge Functions use `Deno.*` and `npm:` imports; they are not part of
+    // the Vite SPA tsconfig and fail type-aware lint under Node. Pure modules +
+    // mock acceptance tests under this tree still run via vitest.
+    ignorePatterns: ['supabase/functions/**'],
     options: {
       typeAware: true,
       typeCheck: true,

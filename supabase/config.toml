@@ -382,6 +382,14 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
+# Provider-paid in-app AI gateway (docs/4 §4.6.1). SPA (Amplify) does not deploy this —
+# use `supabase functions deploy ai-gateway` separately. JWT verification at the
+# platform edge; handler still calls auth.getUser() for user.id.
+[functions.ai-gateway]
+verify_jwt = true
+# Uncomment to pin entry (default: index.ts in the function folder).
+# entrypoint = "./functions/ai-gateway/index.ts"
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
