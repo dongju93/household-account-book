@@ -272,22 +272,40 @@ describe('S02 ai-gateway acceptance', () => {
 
   it('upstream 실패 시 refund', async () => {
     let refundDay: string | undefined
+    let audit:
+      | { code?: string; error_detail?: string; upstream_status?: number; upstream_reason?: string }
+      | undefined
     const deps = makeDeps({
       callXai: async () => {
-        throw new XaiError('upstream', 'boom')
+        throw new XaiError('upstream', 'xAI HTTP 401: Incorrect API key', {
+          status: 401,
+          reason: 'http',
+        })
       },
       refundQuota: async (_userId, _feature, _estimate, claimDay) => {
         refundDay = claimDay
       },
+      logAudit: (entry) => {
+        audit = entry
+      },
     })
     const res = await postJson(baseNlBody(), deps)
     expect(res.status).toBe(502)
-    expect((await res.json()).code).toBe('upstream')
+    const json = await res.json()
+    expect(json.code).toBe('upstream')
+    // Client body stays generic — no provider status/body leak.
+    expect(json.message).not.toContain('401')
+    expect(json.message).not.toContain('API key')
     expect(deps.claims).toBe(1)
     expect(deps.refunds).toBe(1)
     expect(deps.settles).toBe(0)
     // Refund must use claim day, not a recomputed completion-day kst_today.
     expect(refundDay).toBe('2026-07-11')
+    // Ops audit must carry the real cause so Dashboard logs are actionable.
+    expect(audit?.code).toBe('upstream')
+    expect(audit?.upstream_status).toBe(401)
+    expect(audit?.upstream_reason).toBe('http')
+    expect(audit?.error_detail).toContain('401')
   })
 
   it('성공 경로: claim → xAI → settle', async () => {

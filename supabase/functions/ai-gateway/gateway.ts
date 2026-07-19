@@ -229,7 +229,16 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
   } catch (e) {
     await safeRefund(deps, userId, feature, tokenEstimate, claimDay)
     const code = e instanceof XaiError && e.kind === 'parse' ? 'parse' : 'upstream'
+    // Client always gets the generic Korean copy; ops get the real cause.
     const message = code === 'parse' ? MESSAGES.parse : MESSAGES.upstream
+    const errorDetail =
+      e instanceof XaiError
+        ? e.message.slice(0, 400)
+        : e instanceof Error
+          ? e.message.slice(0, 400)
+          : String(e).slice(0, 400)
+    const upstreamStatus = e instanceof XaiError ? e.status : undefined
+    const upstreamReason = e instanceof XaiError ? e.reason : code === 'parse' ? 'parse' : 'network'
     deps.logAudit({
       user_id: userId,
       feature,
@@ -240,6 +249,9 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
       ledger_id: ledgerId,
       ok: false,
       code,
+      error_detail: errorDetail,
+      upstream_status: upstreamStatus,
+      upstream_reason: upstreamReason,
     })
     return jsonResponse(errorBody(code, message), httpStatusFor(code))
   }

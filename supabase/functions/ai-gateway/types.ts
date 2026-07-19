@@ -76,6 +76,15 @@ export interface AuditEntry {
   ledger_id: string
   ok: boolean
   code?: AiErrorCode
+  /**
+   * Ops-only failure diagnostics (never returned in the HTTP body).
+   * Present when ok=false for upstream/parse so Dashboard logs show more than code.
+   */
+  error_detail?: string
+  /** xAI HTTP status when the failure was a non-2xx response. */
+  upstream_status?: number
+  /** Coarse failure class: timeout | http | missing_key | network | parse | empty */
+  upstream_reason?: string
 }
 
 export const FUND_TYPES = ['income', 'expense', 'saving', 'investment'] as const

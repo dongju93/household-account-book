@@ -8,12 +8,24 @@ import { buildFeaturePrompt } from './schemas.ts'
 import type { XaiChatResult } from './types.ts'
 import { validateFeatureResult } from './validate.ts'
 
+/** Why the xAI call failed — ops logs only; never sent to the client. */
+export type XaiFailureReason = 'timeout' | 'http' | 'missing_key' | 'network' | 'parse' | 'empty'
+
 export class XaiError extends Error {
   readonly kind: 'upstream' | 'parse'
-  constructor(kind: 'upstream' | 'parse', message: string) {
+  /** HTTP status from api.x.ai when reason is `http`. */
+  readonly status?: number
+  readonly reason?: XaiFailureReason
+  constructor(
+    kind: 'upstream' | 'parse',
+    message: string,
+    opts?: { status?: number; reason?: XaiFailureReason },
+  ) {
     super(message)
     this.kind = kind
     this.name = 'XaiError'
+    this.status = opts?.status
+    this.reason = opts?.reason
   }
 }
 
@@ -65,7 +77,9 @@ export async function callXaiStructured(options: {
     }
   }
 
-  throw new XaiError('parse', lastParseError?.message ?? 'structured output parse failed')
+  throw new XaiError('parse', lastParseError?.message ?? 'structured output parse failed', {
+    reason: 'parse',
+  })
 }
 
 async function chatCompletion(args: {
@@ -115,10 +129,13 @@ async function chatCompletion(args: {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '')
-      throw new XaiError(
-        'upstream',
-        `xAI HTTP ${res.status}${text ? `: ${text.slice(0, 200)}` : ''}`,
-      )
+      // Cap body preview; never log Authorization. Provider bodies can include
+      // request ids / error codes that distinguish 401 key vs 404 model vs 429.
+      const preview = redactSecrets(text).slice(0, 300)
+      throw new XaiError('upstream', `xAI HTTP ${res.status}${preview ? `: ${preview}` : ''}`, {
+        status: res.status,
+        reason: 'http',
+      })
     }
 
     const data = (await res.json()) as {
@@ -129,7 +146,7 @@ async function chatCompletion(args: {
 
     const contentText = data.choices?.[0]?.message?.content
     if (typeof contentText !== 'string' || contentText.length === 0) {
-      throw new XaiError('parse', 'empty completion content')
+      throw new XaiError('parse', 'empty completion content', { reason: 'empty' })
     }
 
     return {
@@ -141,12 +158,22 @@ async function chatCompletion(args: {
   } catch (e) {
     if (e instanceof XaiError) throw e
     if (e instanceof Error && e.name === 'AbortError') {
-      throw new XaiError('upstream', 'xAI request timed out')
+      throw new XaiError('upstream', 'xAI request timed out', { reason: 'timeout' })
     }
-    throw new XaiError('upstream', e instanceof Error ? e.message : String(e))
+    throw new XaiError('upstream', e instanceof Error ? e.message : String(e), {
+      reason: 'network',
+    })
   } finally {
     clearTimeout(timer)
   }
+}
+
+/** Strip credential-like substrings from provider error bodies before logging. */
+export function redactSecrets(text: string): string {
+  return text
+    .replace(/Bearer\s+[A-Za-z0-9._\-+/=]+/gi, 'Bearer [redacted]')
+    .replace(/xai-[A-Za-z0-9]+/g, 'xai-[redacted]')
+    .replace(/sk-[A-Za-z0-9]+/g, 'sk-[redacted]')
 }
 
 function parseJsonContent(text: string): unknown {

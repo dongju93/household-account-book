@@ -153,7 +153,10 @@ function buildDeps(req: Request): GatewayDeps {
 
     async callXai({ feature, input, model, maxTokens }) {
       if (!xaiKey) {
-        throw new XaiError('upstream', 'XAI_API_KEY is not configured')
+        // Common after deploy when secrets were not set/propagated.
+        throw new XaiError('upstream', 'XAI_API_KEY is not configured', {
+          reason: 'missing_key',
+        })
       }
       return callXaiStructured({
         apiKey: xaiKey,
