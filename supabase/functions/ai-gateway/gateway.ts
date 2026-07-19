@@ -87,6 +87,11 @@ export interface GatewayDeps {
   nowMs: () => number
   /** Override body size limit (tests). */
   maxBodyBytes?: number
+  /**
+   * Optional model id override (production: `XAI_DEFAULT_MODEL` secret).
+   * Empty/undefined → `DEFAULT_MODEL` in config.
+   */
+  defaultModel?: string | null
 }
 
 const CORS_HEADERS: Record<string, string> = {
@@ -221,7 +226,7 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
   const claimDay = claim.day
 
   // ── xAI ──────────────────────────────────────────────────────────────────
-  const model = modelForFeature(feature)
+  const model = modelForFeature(feature, deps.defaultModel)
   const maxTokens = MAX_COMPLETION_TOKENS[feature]
   let xai: XaiChatResult
   try {

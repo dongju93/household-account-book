@@ -6,7 +6,15 @@
 export const RAW_BODY_MAX_BYTES = 32 * 1024
 export const XAI_TIMEOUT_MS = 20_000
 export const XAI_BASE_URL = 'https://api.x.ai/v1'
-export const DEFAULT_MODEL = 'grok-4.3'
+/**
+ * Default chat model for paid gateway features.
+ * Prefer a model every billed team can use; ops can override per deploy via
+ * secret `XAI_DEFAULT_MODEL` without a code change (team model access varies).
+ * Note: `grok-4.3` is documented publicly but is not enabled for all teams —
+ * a 404 "model does not exist or your team … does not have access" maps to
+ * HTTP 502 `code: "upstream"` from this gateway.
+ */
+export const DEFAULT_MODEL = 'grok-4.5'
 export const FLAGSHIP_MODEL = 'grok-4.5'
 export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 export const CACHE_TRIM_KEEP = 20
@@ -76,10 +84,15 @@ export function isAiFeature(value: unknown): value is AiFeature {
   return typeof value === 'string' && (AI_FEATURES as readonly string[]).includes(value)
 }
 
-export function modelForFeature(feature: AiFeature): string {
-  // Flagship only for rare deep chat failures later; P1 default is still grok-4.3.
+/**
+ * Resolve the model id for a feature.
+ * @param envDefault - optional `XAI_DEFAULT_MODEL` (trimmed); empty → code default
+ */
+export function modelForFeature(feature: AiFeature, envDefault?: string | null): string {
+  // Per-feature flagship routing reserved for P1 chat; all features share one default today.
   void feature
-  return DEFAULT_MODEL
+  const fromEnv = (envDefault ?? '').trim()
+  return fromEnv || DEFAULT_MODEL
 }
 
 /** Global kill switch: only explicit "true" enables paid calls (dark launch safe). */

@@ -71,7 +71,7 @@ function okResponse(
     ok: true,
     feature: 'month_close_narrative',
     result,
-    model: 'grok-4.3',
+    model: 'grok-4.5',
     usage: { promptTokens: 200, completionTokens: 60 },
     quota: { remainingDaily: 4, remainingMonthly: 19 },
     cached,

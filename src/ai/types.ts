@@ -174,6 +174,14 @@ export interface MonthInsightResult {
   groundedMonth: string
 }
 
+/**
+ * Bump when the Edge `month_insight` system prompt changes in a way that should
+ * invalidate `ai_insight_cache` rows (hash is client-computed from input only
+ * otherwise, so a prompt-only deploy would keep serving stale bullets for TTL).
+ * Included in the client hash payload only — never sent as gateway `input`.
+ */
+export const MONTH_INSIGHT_PROMPT_REV = 2
+
 export interface MonthCloseNarrativeInput {
   month: string
   needsCheck: { kind: string; label: string }[]

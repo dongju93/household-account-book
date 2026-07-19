@@ -87,7 +87,7 @@ function makeDeps(partial: Partial<GatewayDeps> = {}): TrackedDeps {
     upsertCache: async () => {},
     callXai: async () => ({
       content: { ok: true },
-      model: 'grok-4.3',
+      model: 'grok-4.5',
       promptTokens: 10,
       completionTokens: 5,
     }),
@@ -230,7 +230,7 @@ describe('S02 ai-gateway acceptance', () => {
       lookupCache: async () => ({
         // Schema requires 2–4 bullets; single-item rows are invalid and must not hit.
         result: { bullets: ['캐시 불릿 1', '캐시 불릿 2'], groundedMonth: '2026-07' },
-        model: 'grok-4.3',
+        model: 'grok-4.5',
       }),
     })
     const res = await postJson(insightBody(), deps)
@@ -247,14 +247,14 @@ describe('S02 ai-gateway acceptance', () => {
       lookupCache: async () => ({
         // Valid JSON historically cached, but bullets is not a string[].
         result: { bullets: 'not-an-array', groundedMonth: '2026-07' },
-        model: 'grok-4.3',
+        model: 'grok-4.5',
       }),
       callXai: async () => ({
         content: {
           bullets: ['재생성 불릿 1', '재생성 불릿 2'],
           groundedMonth: '2026-07',
         },
-        model: 'grok-4.3',
+        model: 'grok-4.5',
         promptTokens: 10,
         completionTokens: 5,
       }),

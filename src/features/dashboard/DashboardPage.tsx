@@ -78,7 +78,15 @@ export function DashboardPage() {
     paceRows: showPace ? budgetPaceRowsWithStatus(paceRows, ym) : undefined,
     breakdown,
   })
-  const tips = buildSavingTipTemplates({ summary, achievements })
+  const tips = buildSavingTipTemplates({
+    summary,
+    achievements,
+    topExpenses: breakdown.slice(0, 5).map((r) => ({
+      name: r.name,
+      amount: r.amount,
+      pct: r.pct,
+    })),
+  })
 
   const byMonth = groupTransactionsByMonth(months, rangeTxns)
   const trend = monthlyTrend(byMonth)

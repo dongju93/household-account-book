@@ -38,6 +38,8 @@ function buildDeps(req: Request): GatewayDeps {
 
   return {
     aiFeaturesEnabledEnv: Deno.env.get('AI_FEATURES_ENABLED'),
+    // Team model access varies; set without code change when 404 "model does not exist".
+    defaultModel: Deno.env.get('XAI_DEFAULT_MODEL'),
 
     async getUserId(authHeader) {
       if (!authHeader || !authHeader.toLowerCase().startsWith('bearer ')) {

@@ -1,6 +1,10 @@
 import { invokeAiFeature, isAiClientError } from '../../ai/client'
 import { dataVersionHash, stableStringify } from '../../ai/hash'
-import type { MonthInsightInput, MonthInsightResult } from '../../ai/types'
+import {
+  MONTH_INSIGHT_PROMPT_REV,
+  type MonthInsightInput,
+  type MonthInsightResult,
+} from '../../ai/types'
 import { useAsyncData } from '../../app/useAsyncData'
 import { useAuth } from '../../auth/useAuth'
 import { getAiUserSettings } from '../../data/aiSettings'
@@ -10,12 +14,13 @@ import { describeError } from '../../data/errors'
  * AI 월간 인사이트 카드 (S06 / PR-6, spec §5.3 + §5.11).
  *
  * Numbers on screen stay domain-bound (SummaryCards/AchievementList); this card
- * renders LLM text only, from aggregates built by `buildMonthInsightInput`.
+ * renders LLM coaching bullets only, from aggregates built by
+ * `buildMonthInsightInput`. Template tips underneath are pure domain actions.
  * Hidden entirely when the user opted out (Edge re-enforces server-side).
  * `flag_off` (ops kill switch) hides the AI bullets quietly but keeps the
  * zero-cost template tips, which never duplicate `formatPaceHint` sentences.
- * 다시 생성 simply re-invokes: an unchanged `dataVersionHash` is a cache hit
- * (no quota claim); only changed data spends quota.
+ * 다시 생성 re-invokes: same aggregates + `MONTH_INSIGHT_PROMPT_REV` → cache
+ * hit (no quota); data or prompt-rev change spends quota.
  */
 
 type InsightState =
@@ -50,7 +55,9 @@ export function AiInsightCard({
   } = useAsyncData<InsightState>(async () => {
     if (!enabled) return { kind: 'idle' }
     try {
-      const hash = await dataVersionHash(input)
+      // promptRev busts stale cache after system-prompt quality upgrades without
+      // changing aggregates (and without sending rev into the LLM payload).
+      const hash = await dataVersionHash({ promptRev: MONTH_INSIGHT_PROMPT_REV, input })
       const res = await invokeAiFeature<MonthInsightResult>({
         feature: 'month_insight',
         ledgerId,

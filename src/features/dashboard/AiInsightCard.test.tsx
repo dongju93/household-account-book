@@ -52,7 +52,7 @@ function okResponse(
     ok: true,
     feature: 'month_insight',
     result,
-    model: 'grok-4.3',
+    model: 'grok-4.5',
     usage: { promptTokens: 200, completionTokens: 60 },
     quota: { remainingDaily: 9, remainingMonthly: 39 },
     cached,

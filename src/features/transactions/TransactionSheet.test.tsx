@@ -62,7 +62,7 @@ function okResponse(
     ok: true,
     feature: 'nl_txn_parse',
     result: { draft, confidence: 'high', warnings },
-    model: 'grok-4.3',
+    model: 'grok-4.5',
     usage: { promptTokens: 100, completionTokens: 40 },
     quota: { remainingDaily: 39, remainingMonthly: 399 },
   }
