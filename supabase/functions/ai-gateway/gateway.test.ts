@@ -75,10 +75,12 @@ function makeDeps(partial: Partial<GatewayDeps> = {}): TrackedDeps {
     isLedgerMember: async () => true,
     lookupCache: async () => null,
     claimQuota: async () => ({
-      ok: true,
+      ok: true as const,
       remaining_daily: 39,
       remaining_monthly: 399,
       remaining_tokens_month: 199500,
+      // Claim-day pin: settle/refund must receive this exact KST day.
+      day: '2026-07-11',
     }),
     settleQuota: async () => {},
     refundQuota: async () => {},
@@ -240,9 +242,13 @@ describe('S02 ai-gateway acceptance', () => {
   })
 
   it('upstream 실패 시 refund', async () => {
+    let refundDay: string | undefined
     const deps = makeDeps({
       callXai: async () => {
         throw new XaiError('upstream', 'boom')
+      },
+      refundQuota: async (_userId, _feature, _estimate, claimDay) => {
+        refundDay = claimDay
       },
     })
     const res = await postJson(baseNlBody(), deps)
@@ -251,10 +257,17 @@ describe('S02 ai-gateway acceptance', () => {
     expect(deps.claims).toBe(1)
     expect(deps.refunds).toBe(1)
     expect(deps.settles).toBe(0)
+    // Refund must use claim day, not a recomputed completion-day kst_today.
+    expect(refundDay).toBe('2026-07-11')
   })
 
   it('성공 경로: claim → xAI → settle', async () => {
-    const deps = makeDeps()
+    let settleDay: string | undefined
+    const deps = makeDeps({
+      settleQuota: async (_u, _f, _p, _c, _e, claimDay) => {
+        settleDay = claimDay
+      },
+    })
     const res = await postJson(baseNlBody(), deps)
     expect(res.status).toBe(200)
     const json = await res.json()
@@ -264,6 +277,52 @@ describe('S02 ai-gateway acceptance', () => {
     expect(deps.xaiCalls).toBe(1)
     expect(deps.settles).toBe(1)
     expect(deps.refunds).toBe(0)
+    // Settle must use claim day so a midnight-crossing xAI call releases the
+    // same day's tokens_reserved (P2 claim-day settlement).
+    expect(settleDay).toBe('2026-07-11')
+  })
+
+  it('settle/refund use claim day even when claim day ≠ wall-clock today', async () => {
+    // Simulates claim just before KST midnight and settle/refund after: the
+    // gateway must forward the claim-returned day, not invent a new one.
+    const claimDay = '2026-07-31'
+    let settleDay: string | undefined
+    let refundDay: string | undefined
+
+    const settleDeps = makeDeps({
+      claimQuota: async () => ({
+        ok: true as const,
+        remaining_daily: 1,
+        remaining_monthly: 10,
+        remaining_tokens_month: 1000,
+        day: claimDay,
+      }),
+      settleQuota: async (_u, _f, _p, _c, _e, day) => {
+        settleDay = day
+      },
+    })
+    const okRes = await postJson(baseNlBody(), settleDeps)
+    expect(okRes.status).toBe(200)
+    expect(settleDay).toBe(claimDay)
+
+    const refundDeps = makeDeps({
+      claimQuota: async () => ({
+        ok: true as const,
+        remaining_daily: 1,
+        remaining_monthly: 10,
+        remaining_tokens_month: 1000,
+        day: claimDay,
+      }),
+      callXai: async () => {
+        throw new XaiError('upstream', 'timeout')
+      },
+      refundQuota: async (_u, _f, _e, day) => {
+        refundDay = day
+      },
+    })
+    const failRes = await postJson(baseNlBody(), refundDeps)
+    expect(failRes.status).toBe(502)
+    expect(refundDay).toBe(claimDay)
   })
 
   it('flag_off when AI_FEATURES_ENABLED is not true', async () => {

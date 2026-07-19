@@ -103,25 +103,30 @@ function buildDeps(req: Request): GatewayDeps {
         console.error(JSON.stringify({ audit: 'claim_error', error: error.message }))
         return { ok: false, reason: 'unknown_feature' } satisfies ClaimQuotaResult
       }
+      // claim_ai_quota returns `day` (KST) on ok=true; gateway forwards it to
+      // settle/refund so reservations settle on the claim day after midnight.
       return data as ClaimQuotaResult
     },
 
-    async settleQuota(userId, feature, promptTokens, completionTokens, tokenEstimate) {
+    async settleQuota(userId, feature, promptTokens, completionTokens, tokenEstimate, claimDay) {
       const { error } = await admin.rpc('settle_ai_quota', {
         p_feature: feature,
         p_prompt: promptTokens,
         p_completion: completionTokens,
         p_token_estimate: tokenEstimate,
         p_user_id: userId,
+        // Same KST day as claim — do not recompute "today" at settle time.
+        p_day: claimDay,
       })
       if (error) throw error
     },
 
-    async refundQuota(userId, feature, tokenEstimate) {
+    async refundQuota(userId, feature, tokenEstimate, claimDay) {
       const { error } = await admin.rpc('refund_ai_quota_request', {
         p_feature: feature,
         p_token_estimate: tokenEstimate,
         p_user_id: userId,
+        p_day: claimDay,
       })
       if (error) throw error
     },

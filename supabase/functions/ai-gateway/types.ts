@@ -34,13 +34,30 @@ export interface AiGatewayErrorResponse {
 
 export type AiGatewayResponse<T = unknown> = AiGatewayOkResponse<T> | AiGatewayErrorResponse
 
-export interface ClaimQuotaResult {
-  ok: boolean
+/** Successful claim_ai_quota payload — `day` is the KST day the reservation sits on. */
+export interface ClaimQuotaOk {
+  ok: true
+  remaining_daily: number
+  remaining_monthly: number
+  remaining_tokens_month: number
+  /**
+   * KST calendar day the claim reserved (`YYYY-MM-DD`).
+   * Must be passed to settle/refund so a request that crosses KST midnight
+   * releases the same day's tokens_reserved instead of charging the next day.
+   */
+  day: string
+  feature?: string
+}
+
+export interface ClaimQuotaDenied {
+  ok: false
   reason?: 'daily' | 'monthly' | 'tokens' | 'unknown_feature'
   remaining_daily?: number
   remaining_monthly?: number
   remaining_tokens_month?: number
 }
+
+export type ClaimQuotaResult = ClaimQuotaOk | ClaimQuotaDenied
 
 export interface XaiChatResult {
   content: unknown

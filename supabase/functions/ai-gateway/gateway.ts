@@ -59,8 +59,16 @@ export interface GatewayDeps {
     promptTokens: number,
     completionTokens: number,
     tokenEstimate: number,
+    /** KST day from claim; required so settle matches the reservation row. */
+    claimDay: string,
   ) => Promise<void>
-  refundQuota: (userId: string, feature: AiFeature, tokenEstimate: number) => Promise<void>
+  refundQuota: (
+    userId: string,
+    feature: AiFeature,
+    tokenEstimate: number,
+    /** KST day from claim; required so refund matches the reservation row. */
+    claimDay: string,
+  ) => Promise<void>
   upsertCache: (args: {
     ledgerId: string
     feature: AiFeature
@@ -205,6 +213,10 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
     const msg = quotaExceededMessage(claim.reason)
     return jsonResponse(errorBody('quota_exceeded', msg), 429)
   }
+  // Pin settle/refund to this KST day. claim_ai_quota reserves on kst_today at
+  // claim time; settle/refund must not recompute "today" after xAI returns or a
+  // midnight-crossing call leaves tokens_reserved on the claim day forever.
+  const claimDay = claim.day
 
   // ── xAI ──────────────────────────────────────────────────────────────────
   const model = modelForFeature(feature)
@@ -213,7 +225,7 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
   try {
     xai = await deps.callXai({ feature, input, model, maxTokens })
   } catch (e) {
-    await safeRefund(deps, userId, feature, tokenEstimate)
+    await safeRefund(deps, userId, feature, tokenEstimate, claimDay)
     const code = e instanceof XaiError && e.kind === 'parse' ? 'parse' : 'upstream'
     const message = code === 'parse' ? MESSAGES.parse : MESSAGES.upstream
     deps.logAudit({
@@ -232,7 +244,14 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
 
   // ── settle ───────────────────────────────────────────────────────────────
   try {
-    await deps.settleQuota(userId, feature, xai.promptTokens, xai.completionTokens, tokenEstimate)
+    await deps.settleQuota(
+      userId,
+      feature,
+      xai.promptTokens,
+      xai.completionTokens,
+      tokenEstimate,
+      claimDay,
+    )
   } catch {
     // Rare: xAI already billed; leave claim reserved rather than silent double-refund.
     // Still return result so UX is not blocked.
@@ -292,9 +311,10 @@ async function safeRefund(
   userId: string,
   feature: AiFeature,
   tokenEstimate: number,
+  claimDay: string,
 ): Promise<void> {
   try {
-    await deps.refundQuota(userId, feature, tokenEstimate)
+    await deps.refundQuota(userId, feature, tokenEstimate, claimDay)
   } catch {
     // best-effort
   }

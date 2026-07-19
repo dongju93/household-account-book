@@ -8,6 +8,7 @@ Provider-paid in-app AI entrypoint. Spec: `docs/4` §4.6.1 / §7.1, tracker S02.
 parse body (≤32 KiB) → getUser → AI_FEATURES_ENABLED → in_app_ai_enabled
   → is_ledger_member(minRole) → feature input limits
   → cache hit? (no quota) → claim_ai_quota → xAI (20s) → settle | refund
+  (settle/refund use claim's KST `day` so midnight-crossing calls release the same reservation)
   → optional cache upsert → audit log
 ```
 
