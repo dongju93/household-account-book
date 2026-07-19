@@ -2,7 +2,8 @@
 -- Provider-paid in-app AI platform tables + atomic quota RPCs (docs/4 §4.8, §8, PR-1).
 --
 -- - Day / month boundaries: Asia/Seoul (not UTC midnight).
--- - Quota writes only via SECURITY DEFINER RPCs (or service_role direct).
+-- - Quota writes only via SECURITY DEFINER RPCs with EXECUTE granted to service_role
+--   only (ai-gateway). Never grant claim/settle/refund to authenticated.
 -- - ai_user_settings.in_app_ai_enabled default false (dark launch; public ON is a follow-up).
 -- - Limits: §4.8.1 ($50/mo band). Global token cap feature = '_total' → 200_000 / KST month.
 
@@ -229,7 +230,7 @@ revoke all on function ai_quota_resolve_user(uuid) from public;
 --   ok=true  → remaining_daily, remaining_monthly, remaining_tokens_month
 --   ok=false → reason: 'daily' | 'monthly' | 'tokens' | 'unknown_feature'
 --
--- p_user_id: required for service_role; optional (defaults to auth.uid()) for user JWT.
+-- p_user_id: required (Edge service_role + explicit user id). EXECUTE is service_role only.
 create or replace function claim_ai_quota(
   p_feature text,
   p_token_estimate bigint,
@@ -365,9 +366,8 @@ end;
 $$;
 
 revoke all on function claim_ai_quota(text, bigint, uuid) from public;
+-- Gateway-only: authenticated clients must not claim/settle/refund (quota bypass).
 grant execute on function claim_ai_quota(text, bigint, uuid) to service_role;
--- authenticated may claim for self (auth.uid); Edge prefers service_role + p_user_id
-grant execute on function claim_ai_quota(text, bigint, uuid) to authenticated;
 
 -- ── 6. settle_ai_quota ───────────────────────────────────────────────────────
 -- After successful xAI: convert reserved estimate → actual prompt/completion tokens.
@@ -425,11 +425,11 @@ $$;
 
 revoke all on function settle_ai_quota(text, bigint, bigint, bigint, uuid) from public;
 grant execute on function settle_ai_quota(text, bigint, bigint, bigint, uuid) to service_role;
-grant execute on function settle_ai_quota(text, bigint, bigint, bigint, uuid) to authenticated;
 
 -- ── 7. refund_ai_quota_request ───────────────────────────────────────────────
 -- Upstream/parse failure before a successful settle: undo request + release reserve.
 -- p_token_estimate must match the claim estimate.
+-- EXECUTE is service_role only — client-callable refund races erase in-flight claims.
 create or replace function refund_ai_quota_request(
   p_feature text,
   p_token_estimate bigint default 0,
@@ -469,7 +469,6 @@ $$;
 
 revoke all on function refund_ai_quota_request(text, bigint, uuid) from public;
 grant execute on function refund_ai_quota_request(text, bigint, uuid) to service_role;
-grant execute on function refund_ai_quota_request(text, bigint, uuid) to authenticated;
 
 -- ── 8. Grants for tables (PostgREST) ─────────────────────────────────────────
 grant select on ai_usage_daily to authenticated;
