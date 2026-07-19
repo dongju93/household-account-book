@@ -113,7 +113,10 @@ describe('AiInsightCard (S06 / PR-6)', () => {
     renderCard()
 
     await screen.findByText(TIPS[0])
-    expect(screen.queryByText('다시 생성')).not.toBeInTheDocument()
+    // Wait for the async invoke to settle into `hidden` (tips paint before that).
+    await waitFor(() => {
+      expect(screen.queryByText('다시 생성')).not.toBeInTheDocument()
+    })
     expect(screen.queryByText(/인사이트 생성 중/)).not.toBeInTheDocument()
     expect(screen.queryByText(/일시적으로 사용할 수 없습니다/)).not.toBeInTheDocument()
   })
@@ -147,5 +150,18 @@ describe('AiInsightCard (S06 / PR-6)', () => {
 
     await screen.findByText('응답이 요청한 월과 일치하지 않습니다.')
     expect(screen.queryByText('불릿1')).not.toBeInTheDocument()
+  })
+
+  it('rejects a response with non-array bullets without crashing', async () => {
+    mockedInvoke.mockResolvedValue(
+      okResponse({
+        bullets: 'not-an-array' as unknown as string[],
+        groundedMonth: '2026-07',
+      }),
+    )
+    renderCard()
+
+    await screen.findByText('응답 형식이 올바르지 않습니다.')
+    expect(screen.getByText(TIPS[0])).toBeInTheDocument()
   })
 })

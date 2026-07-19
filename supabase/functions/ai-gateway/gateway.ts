@@ -27,7 +27,7 @@ import type {
   ClaimQuotaResult,
   XaiChatResult,
 } from './types.ts'
-import { parseGatewayBody, periodKeyFor } from './validate.ts'
+import { parseGatewayBody, periodKeyFor, validateFeatureResult } from './validate.ts'
 import { XaiError } from './xai.ts'
 
 export interface CachedInsight {
@@ -182,7 +182,9 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
       periodKey,
       dataVersionHash,
     })
-    if (hit) {
+    // Skip malformed cache rows (legacy poison or schema drift) and regenerate
+    // instead of returning a shape that crashes the card until TTL expiry.
+    if (hit && validateFeatureResult(feature, hit.result).ok) {
       const body: AiGatewayOkResponse = {
         ok: true,
         feature,

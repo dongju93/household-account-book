@@ -60,7 +60,17 @@ export function AiInsightCard({
       if (res.result.groundedMonth !== input.month) {
         return { kind: 'error', message: '응답이 요청한 월과 일치하지 않습니다.' }
       }
-      return { kind: 'ok', bullets: res.result.bullets, cached: res.cached === true }
+      // Belt-and-suspenders: Edge validates schema before cache, but a stale
+      // client contract or bypass must not crash on state.bullets.map.
+      const bullets = res.result.bullets
+      if (
+        !Array.isArray(bullets) ||
+        bullets.length === 0 ||
+        !bullets.every((b) => typeof b === 'string')
+      ) {
+        return { kind: 'error', message: '응답 형식이 올바르지 않습니다.' }
+      }
+      return { kind: 'ok', bullets, cached: res.cached === true }
     } catch (err) {
       if (isAiClientError(err) && err.code === 'flag_off') return { kind: 'hidden' }
       return {

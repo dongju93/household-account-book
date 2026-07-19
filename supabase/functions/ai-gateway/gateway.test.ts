@@ -14,7 +14,7 @@ import {
   TOKEN_ESTIMATE,
 } from './config.ts'
 import { handleAiGateway, type GatewayDeps } from './gateway.ts'
-import { parseGatewayBody, validateGatewayEnvelope } from './validate.ts'
+import { parseGatewayBody, validateFeatureResult, validateGatewayEnvelope } from './validate.ts'
 import { XaiError } from './xai.ts'
 
 const LEDGER = '11111111-1111-4111-8111-111111111111'
@@ -228,7 +228,8 @@ describe('S02 ai-gateway acceptance', () => {
   it('캐시 히트 시 quota 미차감 (cacheable feature)', async () => {
     const deps = makeDeps({
       lookupCache: async () => ({
-        result: { bullets: ['캐시'], groundedMonth: '2026-07' },
+        // Schema requires 2–4 bullets; single-item rows are invalid and must not hit.
+        result: { bullets: ['캐시 불릿 1', '캐시 불릿 2'], groundedMonth: '2026-07' },
         model: 'grok-4.3',
       }),
     })
@@ -239,6 +240,34 @@ describe('S02 ai-gateway acceptance', () => {
     expect(json.cached).toBe(true)
     expect(deps.claims).toBe(0)
     expect(deps.xaiCalls).toBe(0)
+  })
+
+  it('malformed cache row is treated as miss (regenerate, not serve poison)', async () => {
+    const deps = makeDeps({
+      lookupCache: async () => ({
+        // Valid JSON historically cached, but bullets is not a string[].
+        result: { bullets: 'not-an-array', groundedMonth: '2026-07' },
+        model: 'grok-4.3',
+      }),
+      callXai: async () => ({
+        content: {
+          bullets: ['재생성 불릿 1', '재생성 불릿 2'],
+          groundedMonth: '2026-07',
+        },
+        model: 'grok-4.3',
+        promptTokens: 10,
+        completionTokens: 5,
+      }),
+    })
+    const res = await postJson(insightBody(), deps)
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.ok).toBe(true)
+    expect(json.cached).toBe(false)
+    expect(json.result.bullets).toEqual(['재생성 불릿 1', '재생성 불릿 2'])
+    expect(deps.claims).toBe(1)
+    expect(deps.xaiCalls).toBe(1)
+    expect(deps.settles).toBe(1)
   })
 
   it('upstream 실패 시 refund', async () => {
@@ -366,5 +395,54 @@ describe('feature matrix sanity', () => {
   it('token estimates align with §4.8.1', () => {
     expect(TOKEN_ESTIMATE.nl_txn_parse).toBe(500)
     expect(TOKEN_ESTIMATE.month_insight).toBe(750)
+  })
+})
+
+describe('validateFeatureResult (structured output schema)', () => {
+  it('accepts a well-formed month_insight result', () => {
+    const r = validateFeatureResult('month_insight', {
+      bullets: ['a', 'b'],
+      groundedMonth: '2026-07',
+    })
+    expect(r.ok).toBe(true)
+  })
+
+  it('rejects non-array bullets (would crash AiInsightCard map)', () => {
+    const r = validateFeatureResult('month_insight', {
+      bullets: 'oops',
+      groundedMonth: '2026-07',
+    })
+    expect(r.ok).toBe(false)
+  })
+
+  it('rejects too few bullets', () => {
+    const r = validateFeatureResult('month_insight', {
+      bullets: ['only-one'],
+      groundedMonth: '2026-07',
+    })
+    expect(r.ok).toBe(false)
+  })
+
+  it('accepts nl_txn_parse with null draft fields', () => {
+    const r = validateFeatureResult('nl_txn_parse', {
+      draft: {
+        amount: null,
+        type: null,
+        categoryName: null,
+        date: null,
+        memo: null,
+      },
+      confidence: 'low',
+      warnings: ['금액 불명'],
+    })
+    expect(r.ok).toBe(true)
+  })
+
+  it('rejects nl_txn_parse missing draft', () => {
+    const r = validateFeatureResult('nl_txn_parse', {
+      confidence: 'high',
+      warnings: [],
+    })
+    expect(r.ok).toBe(false)
   })
 })

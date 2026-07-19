@@ -1,11 +1,12 @@
 /**
  * xAI Chat Completions (OpenAI-compatible) with structured json_schema output.
- * Spec: docs/4 §4.6 — timeout 20s, 1 parse retry.
+ * Spec: docs/4 §4.6 — timeout 20s, 1 parse/schema-validate retry.
  */
 
 import { XAI_BASE_URL, XAI_TIMEOUT_MS, type AiFeature } from './config.ts'
 import { buildFeaturePrompt } from './schemas.ts'
 import type { XaiChatResult } from './types.ts'
+import { validateFeatureResult } from './validate.ts'
 
 export class XaiError extends Error {
   readonly kind: 'upstream' | 'parse'
@@ -47,6 +48,12 @@ export async function callXaiStructured(options: {
 
     try {
       const content = parseJsonContent(raw.contentText)
+      // Schema check before settle/cache: JSON.parse alone accepts wrong shapes
+      // (e.g. bullets: "…") that crash clients and poison the insight cache.
+      const shape = validateFeatureResult(options.feature, content)
+      if (!shape.ok) {
+        throw new Error(shape.message)
+      }
       return {
         content,
         model: raw.model || options.model,

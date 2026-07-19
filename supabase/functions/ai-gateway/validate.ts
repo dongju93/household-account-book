@@ -244,3 +244,152 @@ export function periodKeyFor(feature: AiFeature, input: unknown): string | null 
       return null
   }
 }
+
+// ── Structured-output result validation (mirrors schemas.ts) ─────────────────
+// xAI may return syntactically valid JSON that still violates the feature
+// schema. Reject before settle/cache so a bad shape is never served or stored.
+
+export type ResultValidationOk = { ok: true }
+export type ResultValidationErr = { ok: false; message: string }
+export type ResultValidation = ResultValidationOk | ResultValidationErr
+
+function resultFail(message: string): ResultValidationErr {
+  return { ok: false, message }
+}
+
+function isStringArray(v: unknown, min: number, max: number): v is string[] {
+  return (
+    Array.isArray(v) &&
+    v.length >= min &&
+    v.length <= max &&
+    v.every((item) => typeof item === 'string')
+  )
+}
+
+function isNullableString(v: unknown): boolean {
+  return v === null || typeof v === 'string'
+}
+
+/**
+ * Validate provider output against the per-feature structured schema.
+ * Used after JSON.parse (with retry) and on cache hit before settlement/serve.
+ */
+export function validateFeatureResult(feature: AiFeature, result: unknown): ResultValidation {
+  switch (feature) {
+    case 'nl_txn_parse':
+      return validateNlTxnParseResult(result)
+    case 'month_insight':
+      return validateMonthInsightResult(result)
+    case 'month_close_narrative':
+      return validateMonthCloseNarrativeResult(result)
+    case 'period_explain':
+      return validatePeriodExplainResult(result)
+    case 'category_suggest':
+      return validateCategorySuggestResult(result)
+    case 'budget_recommend':
+      return validateBudgetRecommendResult(result)
+    case 'chat_turn':
+      return validateChatTurnResult(result)
+    default:
+      return resultFail('알 수 없는 feature 입니다.')
+  }
+}
+
+function validateNlTxnParseResult(result: unknown): ResultValidation {
+  if (!isRecord(result)) return resultFail('nl_txn_parse 결과는 객체여야 합니다.')
+  const { draft, confidence, warnings } = result
+  if (!isRecord(draft)) return resultFail('draft 객체가 필요합니다.')
+  const amountOk =
+    draft.amount === null ||
+    (typeof draft.amount === 'number' && Number.isInteger(draft.amount) && draft.amount >= 1)
+  if (!amountOk) return resultFail('draft.amount는 양의 정수 또는 null이어야 합니다.')
+  if (
+    draft.type !== null &&
+    !(typeof draft.type === 'string' && (FUND_TYPES as readonly string[]).includes(draft.type))
+  ) {
+    return resultFail('draft.type이 올바르지 않습니다.')
+  }
+  if (!isNullableString(draft.categoryName)) {
+    return resultFail('draft.categoryName은 문자열 또는 null이어야 합니다.')
+  }
+  if (!isNullableString(draft.date))
+    return resultFail('draft.date는 문자열 또는 null이어야 합니다.')
+  if (!isNullableString(draft.memo))
+    return resultFail('draft.memo는 문자열 또는 null이어야 합니다.')
+  if (confidence !== 'high' && confidence !== 'medium' && confidence !== 'low') {
+    return resultFail('confidence는 high|medium|low 여야 합니다.')
+  }
+  if (!Array.isArray(warnings) || !warnings.every((w) => typeof w === 'string')) {
+    return resultFail('warnings는 문자열 배열이어야 합니다.')
+  }
+  return { ok: true }
+}
+
+function validateMonthInsightResult(result: unknown): ResultValidation {
+  if (!isRecord(result)) return resultFail('month_insight 결과는 객체여야 합니다.')
+  if (!isStringArray(result.bullets, 2, 4)) {
+    return resultFail('bullets는 2~4개의 문자열 배열이어야 합니다.')
+  }
+  if (typeof result.groundedMonth !== 'string') {
+    return resultFail('groundedMonth는 문자열이어야 합니다.')
+  }
+  return { ok: true }
+}
+
+function validateMonthCloseNarrativeResult(result: unknown): ResultValidation {
+  if (!isRecord(result)) return resultFail('month_close_narrative 결과는 객체여야 합니다.')
+  if (typeof result.narrative !== 'string') {
+    return resultFail('narrative는 문자열이어야 합니다.')
+  }
+  if (typeof result.groundedMonth !== 'string') {
+    return resultFail('groundedMonth는 문자열이어야 합니다.')
+  }
+  return { ok: true }
+}
+
+function validatePeriodExplainResult(result: unknown): ResultValidation {
+  if (!isRecord(result)) return resultFail('period_explain 결과는 객체여야 합니다.')
+  if (!isStringArray(result.bullets, 2, 4)) {
+    return resultFail('bullets는 2~4개의 문자열 배열이어야 합니다.')
+  }
+  if (typeof result.periodKey !== 'string') {
+    return resultFail('periodKey는 문자열이어야 합니다.')
+  }
+  return { ok: true }
+}
+
+function validateCategorySuggestResult(result: unknown): ResultValidation {
+  if (!isRecord(result)) return resultFail('category_suggest 결과는 객체여야 합니다.')
+  if (!Array.isArray(result.suggestions) || result.suggestions.length > 3) {
+    return resultFail('suggestions는 최대 3개 배열이어야 합니다.')
+  }
+  for (const s of result.suggestions) {
+    if (!isRecord(s)) return resultFail('suggestion 항목 형식이 올바르지 않습니다.')
+    if (typeof s.categoryName !== 'string') {
+      return resultFail('suggestion.categoryName은 문자열이어야 합니다.')
+    }
+    if (typeof s.type !== 'string' || !(FUND_TYPES as readonly string[]).includes(s.type)) {
+      return resultFail('suggestion.type이 올바르지 않습니다.')
+    }
+  }
+  return { ok: true }
+}
+
+function validateBudgetRecommendResult(result: unknown): ResultValidation {
+  if (!isRecord(result)) return resultFail('budget_recommend 결과는 객체여야 합니다.')
+  if (!Array.isArray(result.reasons)) return resultFail('reasons는 배열이어야 합니다.')
+  for (const r of result.reasons) {
+    if (!isRecord(r)) return resultFail('reason 항목 형식이 올바르지 않습니다.')
+    if (typeof r.categoryName !== 'string') {
+      return resultFail('reason.categoryName은 문자열이어야 합니다.')
+    }
+    if (typeof r.reason !== 'string') return resultFail('reason.reason은 문자열이어야 합니다.')
+  }
+  return { ok: true }
+}
+
+function validateChatTurnResult(result: unknown): ResultValidation {
+  if (!isRecord(result)) return resultFail('chat_turn 결과는 객체여야 합니다.')
+  if (typeof result.reply !== 'string') return resultFail('reply는 문자열이어야 합니다.')
+  return { ok: true }
+}
