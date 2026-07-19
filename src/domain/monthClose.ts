@@ -24,13 +24,26 @@ const byAmountDesc = (a: Ranked, b: Ranked) => b.amount - a.amount
 const dropAmount = ({ amount: _amount, ...finding }: Ranked): MonthCloseFinding => finding
 
 /**
+ * Shown when a non-editor runs a month-close review for a month whose
+ * recurring occurrences were never written. `materialize_recurring` no-ops
+ * for viewers (returns 0), so treating the un-materialized window as a full
+ * review would under-count budgets/goals and can surface a false "no issues"
+ * (or noisy `missing_recurring` canaries that are permission gaps, not bugs).
+ * Editors never hit this path after a successful materialize call.
+ */
+export const MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON =
+  '이 달의 고정 항목이 아직 반영되지 않았습니다. 편집 권한이 있는 구성원이 해당 월을 열면 점검할 수 있습니다.'
+
+/**
  * Active recurring items with no materialized occurrence in `materializedTxns`
- * for `ym`. Expected to always be empty in practice — `materialize_recurring`
- * already guarantees this via its unique index — so callers must pre-filter
+ * for `ym`. Expected to always be empty in practice once an editor has run
+ * `materialize_recurring` (unique index) — callers must pre-filter
  * `recurringItems` to drop anything covered by a `recurring_skips` row for
  * `ym` first. A skipped item is not "missing" (it was never supposed to
  * materialize this month); an item that survives that filter and still has no
- * matching transaction here means materialization itself is broken.
+ * matching transaction means either materialization is broken (editor) or the
+ * month was never opened by an editor (viewer — fail closed via
+ * `MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON`).
  */
 export function findMissingRecurringOccurrences(
   recurringItems: readonly RecurringItem[],

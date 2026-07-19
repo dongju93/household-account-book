@@ -5,7 +5,12 @@ import { listCategories } from '../data/categories'
 import { listRecurring, listSkippedRecurringIds } from '../data/recurring'
 import { fetchTransactionsInRange, materializeMonth } from '../data/summary'
 import { computeAchievements } from '../domain/achievement'
-import { type MonthCloseFinding, reviewMonth } from '../domain/monthClose'
+import {
+  findMissingRecurringOccurrences,
+  MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON,
+  type MonthCloseFinding,
+  reviewMonth,
+} from '../domain/monthClose'
 import {
   addMonths,
   currentYearMonth,
@@ -118,11 +123,14 @@ interface MonthCloseOutput {
 /**
  * Fetches everything `reviewMonth` needs for `ym` and runs it. Unlike the
  * screen-mounted budget_pace and qna tools, this tool is not backed by any
- * screen's already-loaded data (see docs/3. ai-plan-month-close-review.md §1)
- * — it materializes and fetches for itself on every call.
+ * screen's already-loaded data — it materializes and fetches for itself on
+ * every call. Viewers get `ready: false` when the month still has eligible
+ * recurring rows with no occurrence (materialize is editor-only); see
+ * `MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON`.
  */
 async function loadMonthCloseReview(
   ledgerId: string | null,
+  canEdit: boolean,
   monthInput: string | undefined,
 ): Promise<MonthCloseOutput> {
   if (!ledgerId) return { ready: false, reason: NOT_READY_REASON }
@@ -145,6 +153,14 @@ async function loadMonthCloseReview(
   // dropping them here keeps `findMissingRecurringOccurrences` from ever
   // reading a deliberate skip as a materialization bug.
   const eligibleRecurring = recurringItems.filter((r) => !skippedRecurringIds.has(r.id))
+
+  // Viewers cannot write occurrences. Incomplete materialization must not
+  // become findings or a false clean review — fail closed until an editor
+  // has opened (materialized) the month.
+  if (!canEdit && findMissingRecurringOccurrences(eligibleRecurring, txns, ym).length > 0) {
+    return { ready: false, reason: MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON }
+  }
+
   const activeCategories = categories.filter((c) => c.isActive)
   const achievements = computeAchievements(activeCategories, txns).filter(
     (r) => r.target > 0 || r.actual > 0,
@@ -179,18 +195,18 @@ async function loadMonthCloseReview(
  * `MONTH_CLOSE_ANNOTATIONS` above.
  */
 export function useMonthCloseTools(): void {
-  const { ledgerId } = useLedger()
+  const { ledgerId, canEdit } = useLedger()
 
   useWebMCP(
     {
       name: 'month_close_review',
       description:
-        '지정한 달(기본: 지난달)의 마감 점검 결과를 확인 필요(needsCheck) / 참고(forReference)로 분류해 반환한다. "이상 없음" 항목은 개수만 요약한다(noIssueSummary). 각 항목의 nav에 월·카테고리·메모 검색 힌트를 포함해, 거래 내역 화면에서 바로 찾아볼 수 있게 한다.',
+        '지정한 달(기본: 지난달)의 마감 점검 결과를 확인 필요(needsCheck) / 참고(forReference)로 분류해 반환한다. "이상 없음" 항목은 개수만 요약한다(noIssueSummary). 각 항목의 nav에 월·카테고리·메모 검색 힌트를 포함해, 거래 내역 화면에서 바로 찾아볼 수 있게 한다. 고정 항목이 아직 반영되지 않은 달을 viewer가 요청하면 ready:false를 반환한다(materialize는 editor 전용).',
       inputSchema: INPUT_SCHEMA,
       outputSchema: OUTPUT_SCHEMA,
       annotations: { title: '월 마감 점검', ...MONTH_CLOSE_ANNOTATIONS },
-      handler: (input) => loadMonthCloseReview(ledgerId, input.month),
+      handler: (input) => loadMonthCloseReview(ledgerId, canEdit, input.month),
     },
-    [ledgerId],
+    [ledgerId, canEdit],
   )
 }

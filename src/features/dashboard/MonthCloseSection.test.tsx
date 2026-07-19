@@ -5,7 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import type { MonthCloseReviewData } from '../../ai/loadMonthCloseForNarrative'
 import type { AiGatewayOkResponse, MonthCloseNarrativeResult } from '../../ai/types'
 import { AuthContext, type AuthValue } from '../../auth/authContext'
+import { LedgerContext, type LedgerValue } from '../../auth/ledgerContext'
 import type { AiUserSettings } from '../../data/aiSettings'
+import { MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON } from '../../domain/monthClose'
 import { addMonths, currentYearMonth, monthKey } from '../../lib/month'
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }))
@@ -76,7 +78,7 @@ function okResponse(
   }
 }
 
-function renderSection(ym = PAST) {
+function renderSection(ym = PAST, { canEdit = true }: { canEdit?: boolean } = {}) {
   const auth: AuthValue = {
     status: 'authed',
     user: { id: USER_ID } as AuthValue['user'],
@@ -85,9 +87,20 @@ function renderSection(ym = PAST) {
     signUp: async () => ({}),
     signOut: async () => {},
   }
+  const ledger: LedgerValue = {
+    status: 'ready',
+    ledgerId: LEDGER_ID,
+    ledgerName: '테스트',
+    role: canEdit ? 'owner' : 'viewer',
+    canEdit,
+    canManage: canEdit,
+    reload: () => {},
+  }
   return render(
     <AuthContext.Provider value={auth}>
-      <MonthCloseSection ledgerId={LEDGER_ID} ym={ym} />
+      <LedgerContext.Provider value={ledger}>
+        <MonthCloseSection ledgerId={LEDGER_ID} ym={ym} />
+      </LedgerContext.Provider>
     </AuthContext.Provider>,
   )
 }
@@ -127,7 +140,19 @@ describe('MonthCloseSection (S07 / PR-7)', () => {
     expect(mockedLoad).not.toHaveBeenCalled()
 
     await expandSection(user)
-    await waitFor(() => expect(mockedLoad).toHaveBeenCalledWith(LEDGER_ID, PAST))
+    await waitFor(() => expect(mockedLoad).toHaveBeenCalledWith(LEDGER_ID, PAST, { canEdit: true }))
+  })
+
+  it('surfaces the incomplete-materialize reason for viewers (no narrative call)', async () => {
+    const user = userEvent.setup()
+    mockedLoad.mockRejectedValue(new Error(MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON))
+    renderSection(PAST, { canEdit: false })
+
+    await expandSection(user)
+
+    await screen.findByText(MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON)
+    expect(mockedInvoke).not.toHaveBeenCalled()
+    expect(mockedLoad).toHaveBeenCalledWith(LEDGER_ID, PAST, { canEdit: false })
   })
 
   it('never calls the gateway while the review loader is still pending (ready gate)', async () => {

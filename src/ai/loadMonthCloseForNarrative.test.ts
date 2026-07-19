@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
-import type { MonthCloseFinding } from '../domain/monthClose'
+import {
+  MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON,
+  type MonthCloseFinding,
+} from '../domain/monthClose'
 import type { Category, RecurringItem, Transaction } from '../domain/types'
 import { monthKey, type YearMonth } from '../lib/month'
 
@@ -100,7 +103,7 @@ describe('loadMonthCloseForNarrative (S07 / PR-7)', () => {
       }),
     )
 
-    const pending = loadMonthCloseForNarrative('ledger-1', YM)
+    const pending = loadMonthCloseForNarrative('ledger-1', YM, { canEdit: true })
     await Promise.resolve()
     expect(mockedMaterializeMonth).toHaveBeenCalledWith('ledger-1', YM)
     expect(mockedFetchTxns).not.toHaveBeenCalled()
@@ -111,7 +114,7 @@ describe('loadMonthCloseForNarrative (S07 / PR-7)', () => {
   })
 
   it('classifies findings like the WebMCP review (over_budget → needsCheck)', async () => {
-    const review = await loadMonthCloseForNarrative('ledger-1', YM)
+    const review = await loadMonthCloseForNarrative('ledger-1', YM, { canEdit: true })
 
     expect(review.month).toBe(YM_KEY)
     expect(review.needsCheck.map((f) => f.kind)).toContain('over_budget')
@@ -121,9 +124,43 @@ describe('loadMonthCloseForNarrative (S07 / PR-7)', () => {
   it('drops recurring items covered by a recurring_skips row for the month', async () => {
     mockedListSkipped.mockResolvedValue(new Set(['r1']))
 
-    const review = await loadMonthCloseForNarrative('ledger-1', YM)
+    const review = await loadMonthCloseForNarrative('ledger-1', YM, { canEdit: true })
 
     expect(review.needsCheck.map((f) => f.kind)).not.toContain('missing_recurring')
+  })
+
+  it('fails closed for viewers when eligible recurring occurrences are still missing', async () => {
+    // materializeMonth is a no-op for viewers; un-materialized recurring would
+    // otherwise under-count budgets and can produce a false clean review.
+    await expect(loadMonthCloseForNarrative('ledger-1', YM, { canEdit: false })).rejects.toThrow(
+      MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON,
+    )
+  })
+
+  it('allows viewers when every eligible recurring occurrence is already materialized', async () => {
+    mockedFetchTxns.mockResolvedValue([
+      ...TXNS,
+      {
+        id: 't-rec',
+        ledgerId: 'ledger-1',
+        categoryId: 'food',
+        txnDate: `${YM_KEY}-01`,
+        type: 'expense',
+        amount: 500_000,
+        memo: null,
+        source: 'recurring',
+        recurringId: 'r1',
+        occurrenceMonth: `${YM_KEY}-01`,
+        createdAt: '',
+        updatedAt: '',
+      },
+    ])
+
+    const review = await loadMonthCloseForNarrative('ledger-1', YM, { canEdit: false })
+
+    expect(review.month).toBe(YM_KEY)
+    expect(review.needsCheck.map((f) => f.kind)).not.toContain('missing_recurring')
+    expect(review.needsCheck.map((f) => f.kind)).toContain('over_budget')
   })
 })
 

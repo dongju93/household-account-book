@@ -10,6 +10,7 @@ import type { MonthCloseNarrativeResult } from '../../ai/types'
 import { useAsyncData } from '../../app/useAsyncData'
 import { useRefresh } from '../../app/useRefresh'
 import { useAuth } from '../../auth/useAuth'
+import { useLedger } from '../../auth/useLedger'
 import { getAiUserSettings } from '../../data/aiSettings'
 import { describeError } from '../../data/errors'
 import type { MonthCloseFinding } from '../../domain/monthClose'
@@ -27,6 +28,10 @@ import { currentYearMonth, type YearMonth } from '../../lib/month'
  * card's template tips they survive `flag_off`; opting out hides the whole
  * section (and skips the loader entirely). Zero findings short-circuits to a
  * domain no-issue line without spending any quota.
+ *
+ * Viewers may open the section, but if the month was never materialized by an
+ * editor the loader fails closed (see `MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON`)
+ * instead of reporting an incomplete clean review.
  */
 
 type NarrativeState =
@@ -38,6 +43,7 @@ type NarrativeState =
 export function MonthCloseSection({ ledgerId, ym }: { ledgerId: string; ym: YearMonth }) {
   const { user } = useAuth()
   const userId = user?.id
+  const { canEdit } = useLedger()
   const { version } = useRefresh()
   const [open, setOpen] = useState(false)
 
@@ -56,8 +62,9 @@ export function MonthCloseSection({ ledgerId, ym }: { ledgerId: string; ym: Year
     loading: reviewLoading,
     error: reviewError,
   } = useAsyncData(
-    () => (shouldLoad ? loadMonthCloseForNarrative(ledgerId, ym) : Promise.resolve(null)),
-    [shouldLoad, ledgerId, ym.year, ym.month, version],
+    () =>
+      shouldLoad ? loadMonthCloseForNarrative(ledgerId, ym, { canEdit }) : Promise.resolve(null),
+    [shouldLoad, ledgerId, ym.year, ym.month, version, canEdit],
   )
 
   const findingsCount = review ? review.needsCheck.length + review.forReference.length : 0
