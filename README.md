@@ -97,3 +97,44 @@ pnpm dev
 | `pnpm test:watch` | 테스트 감시 모드   |
 | `pnpm lint`       | 린트               |
 | `pnpm format`     | 포맷 적용          |
+
+## AI 게이트웨이 (Edge Function) 배포
+
+인앱 AI는 SPA가 아니라 **Supabase Edge Function `ai-gateway`** 가 xAI를 호출합니다.  
+API 키는 클라이언트/`VITE_*`에 넣지 않습니다. Amplify(`amplify.yml`)는 프론트 `dist/`만 빌드하므로, **함수 배포는 Amplify와 분리**합니다.
+
+### 1. 시크릿 설정
+
+```bash
+supabase secrets set XAI_API_KEY=xai-...
+# 선택: 글로벌 킬 스위치 (dark launch는 false 유지 권장)
+supabase secrets set AI_FEATURES_ENABLED=false
+# AI_QUOTA_TZ 기본은 Asia/Seoul — 쿼터 일/월 경계는 DB RPC가 KST 기준
+```
+
+플랫폼이 주입하는 값(`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`)은 보통 별도 설정이 필요 없습니다. 로컬 서빙 시에는 `supabase start` 환경에 맞춰 자동 주입됩니다.
+
+### 2. 함수 배포 / 롤백
+
+```bash
+# 스키마(PR-1) 적용 후
+supabase db push
+
+# 함수만 배포 (SPA 배포와 독립)
+supabase functions deploy ai-gateway
+
+# 롤백: 킬 스위치 또는 함수 제거
+supabase secrets set AI_FEATURES_ENABLED=false
+# supabase functions delete ai-gateway   # 필요 시
+```
+
+### 3. 로컬 검증
+
+```bash
+supabase start
+supabase functions serve ai-gateway --env-file supabase/.env.local
+# JWT + body로 POST /functions/v1/ai-gateway
+pnpm exec vp test run supabase/functions/ai-gateway/gateway.test.ts
+```
+
+자세한 제어 흐름·에러 코드는 `docs/4. ai-provider-paid-feature-candidates.md` §4.6.1 / §7.1 및 추적 파일 `docs/4-1` S02를 참고하세요.

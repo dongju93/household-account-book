@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { buildMonthInsightInput } from '../../ai/buildMonthInsightInput'
 import { useAsyncData } from '../../app/useAsyncData'
 import { useDocumentTitle } from '../../app/useDocumentTitle'
 import { useRefresh } from '../../app/useRefresh'
@@ -7,7 +8,12 @@ import { useLedger } from '../../auth/useLedger'
 import { listCategories } from '../../data/categories'
 import { fetchTransactionsInRange, materializeMonths } from '../../data/summary'
 import { computeAchievements } from '../../domain/achievement'
-import { computeBudgetPaceRows, paceByCategoryId } from '../../domain/budgetPace'
+import { buildSavingTipTemplates } from '../../domain/ai/savingTipTemplates'
+import {
+  budgetPaceRowsWithStatus,
+  computeBudgetPaceRows,
+  paceByCategoryId,
+} from '../../domain/budgetPace'
 import { computeMonthSummary } from '../../domain/monthSummary'
 import {
   categoryExpenseBreakdown,
@@ -18,7 +24,9 @@ import { addMonths, currentYearMonth, monthRange, todayISO } from '../../lib/mon
 import { AppBar, ErrorBanner, LoadingState, MonthNav, ScreenBody } from '../../ui'
 import { useBudgetPaceTools } from '../../webmcp/useBudgetPaceTools'
 import { AchievementList } from './AchievementList'
+import { AiInsightCard } from './AiInsightCard'
 import { DashboardCharts } from './DashboardCharts'
+import { MonthCloseSection } from './MonthCloseSection'
 import { SummaryCards } from './SummaryCards'
 
 const TREND_MONTHS = 6
@@ -56,10 +64,21 @@ export function DashboardPage() {
     (r) => r.target > 0 || r.actual > 0,
   )
   const today = todayISO()
-  const paceLookup = paceByCategoryId(computeBudgetPaceRows(activeCategories, selTxns, ym, today))
+  const paceRows = computeBudgetPaceRows(activeCategories, selTxns, ym, today)
+  const paceLookup = paceByCategoryId(paceRows)
   const now = currentYearMonth()
   const showPace = ym.year === now.year && ym.month === now.month
   const breakdown = categoryExpenseBreakdown(categories, selTxns)
+
+  // Aggregates only — raw transactions never leave the client (spec §5.3).
+  const insightInput = buildMonthInsightInput({
+    ym,
+    summary,
+    achievements,
+    paceRows: showPace ? budgetPaceRowsWithStatus(paceRows, ym) : undefined,
+    breakdown,
+  })
+  const tips = buildSavingTipTemplates({ summary, achievements })
 
   const byMonth = groupTransactionsByMonth(months, rangeTxns)
   const trend = monthlyTrend(byMonth)
@@ -87,6 +106,8 @@ export function DashboardPage() {
         {!loading && !error && (
           <>
             <SummaryCards summary={summary} />
+            {ledgerId && <AiInsightCard ledgerId={ledgerId} input={insightInput} tips={tips} />}
+            {ledgerId && <MonthCloseSection ledgerId={ledgerId} ym={ym} />}
             <AchievementList
               rows={achievements}
               paceByCategoryId={paceLookup}

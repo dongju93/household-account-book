@@ -1,11 +1,12 @@
-import type { ModelContextWithExtensions } from '@mcp-b/webmcp-types'
-import { act, renderHook } from '@testing-library/react'
+import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 import { LedgerContext, type LedgerValue } from '../auth/ledgerContext'
+import { MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON } from '../domain/monthClose'
 import type { Category, RecurringItem, Transaction } from '../domain/types'
 import { addMonths, currentYearMonth, monthKey } from '../lib/month'
 import '../webmcp/registerWebMcpRuntime'
+import { callTool, registeredToolNames } from './testHelpers'
 
 vi.mock('../data/categories', () => ({ listCategories: vi.fn() }))
 vi.mock('../data/recurring', () => ({ listRecurring: vi.fn(), listSkippedRecurringIds: vi.fn() }))
@@ -105,27 +106,14 @@ const RECURRING: RecurringItem[] = [
   },
 ]
 
-function modelContext(): ModelContextWithExtensions {
-  return document.modelContext as unknown as ModelContextWithExtensions
-}
-
-async function callTool(name: string, args: Record<string, unknown>) {
-  let response: Awaited<ReturnType<ModelContextWithExtensions['callTool']>> | undefined
-  await act(async () => {
-    response = await modelContext().callTool({ name, arguments: args })
-  })
-  if (!response) throw new Error(`callTool("${name}") did not resolve`)
-  return response
-}
-
-function renderTools(ledgerId: string | null) {
+function renderTools(ledgerId: string | null, { canEdit = true }: { canEdit?: boolean } = {}) {
   const ledgerValue: LedgerValue = {
     status: ledgerId ? 'ready' : 'loading',
     ledgerId,
     ledgerName: null,
-    role: 'owner',
-    canEdit: true,
-    canManage: true,
+    role: canEdit ? 'owner' : 'viewer',
+    canEdit,
+    canManage: canEdit,
     reload: () => {},
   }
   return renderHook(() => useMonthCloseTools(), {
@@ -145,11 +133,9 @@ beforeEach(() => {
 })
 
 describe('useMonthCloseTools', () => {
-  it('registers month_close_review on document.modelContext', () => {
+  it('registers month_close_review on document.modelContext', async () => {
     renderTools('ledger-1')
-    const names = modelContext()
-      .listTools()
-      .map((t) => t.name)
+    const names = await registeredToolNames()
     expect(names).toContain('month_close_review')
   })
 
@@ -210,5 +196,46 @@ describe('useMonthCloseTools', () => {
 
     expect(response.structuredContent).toMatchObject({ ready: false })
     expect(mockedMaterializeMonth).not.toHaveBeenCalled()
+  })
+
+  it('fails closed for viewers when eligible recurring occurrences are still missing', async () => {
+    renderTools('ledger-1', { canEdit: false })
+
+    const response = await callTool('month_close_review', {})
+
+    expect(response.structuredContent).toEqual({
+      ready: false,
+      reason: MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON,
+    })
+  })
+
+  it('allows viewers when every eligible recurring occurrence is already materialized', async () => {
+    mockedFetchTxns.mockResolvedValue([
+      ...TXNS,
+      {
+        id: 't-rec',
+        ledgerId: 'ledger-1',
+        categoryId: 'food',
+        txnDate: `${LAST_KEY}-01`,
+        type: 'expense',
+        amount: 500_000,
+        memo: null,
+        source: 'recurring',
+        recurringId: 'r1',
+        occurrenceMonth: `${LAST_KEY}-01`,
+        createdAt: '',
+        updatedAt: '',
+      },
+    ])
+    renderTools('ledger-1', { canEdit: false })
+
+    const response = await callTool('month_close_review', {})
+
+    const content = response.structuredContent as {
+      ready: boolean
+      needsCheck: { kind: string }[]
+    }
+    expect(content.ready).toBe(true)
+    expect(content.needsCheck.map((f) => f.kind)).not.toContain('missing_recurring')
   })
 })

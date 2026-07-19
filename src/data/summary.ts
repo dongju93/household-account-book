@@ -6,7 +6,9 @@ import { mapTransaction } from './mappers'
 
 /**
  * Ensure the selected month's recurring occurrences exist as real transactions.
- * Idempotent; viewers are a no-op server-side (the RPC returns 0).
+ * Idempotent; viewers are a no-op server-side (the RPC returns 0). Callers that
+ * need a complete month for review/AI must fail closed for viewers when
+ * occurrences are still missing — see `MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON`.
  */
 export async function materializeMonth(ledgerId: string, ym: YearMonth): Promise<void> {
   const month = `${monthKey(ym.year, ym.month)}-01`

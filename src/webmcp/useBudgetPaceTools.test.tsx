@@ -1,5 +1,4 @@
-import type { ModelContextWithExtensions } from '@mcp-b/webmcp-types'
-import { act, renderHook } from '@testing-library/react'
+import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 import { RefreshContext } from '../app/refreshContext'
@@ -7,6 +6,7 @@ import { LedgerContext, type LedgerValue } from '../auth/ledgerContext'
 import type { Category, Transaction } from '../domain/types'
 import { todayISO } from '../lib/month'
 import '../webmcp/registerWebMcpRuntime'
+import { callTool, registeredToolNames } from './testHelpers'
 
 vi.mock('../data/categories', () => ({ listCategories: vi.fn() }))
 vi.mock('../data/summary', () => ({
@@ -87,21 +87,6 @@ const TXNS: Transaction[] = [
   },
 ]
 
-// `document.modelContext`'s ambient type is the strict W3C `ModelContextCore`
-// surface; `listTools`/`callTool` are MCP-B runtime extensions on top of it.
-function modelContext(): ModelContextWithExtensions {
-  return document.modelContext as unknown as ModelContextWithExtensions
-}
-
-async function callTool(name: string, args: Record<string, unknown>) {
-  let response: Awaited<ReturnType<ModelContextWithExtensions['callTool']>> | undefined
-  await act(async () => {
-    response = await modelContext().callTool({ name, arguments: args })
-  })
-  if (!response) throw new Error(`callTool("${name}") did not resolve`)
-  return response
-}
-
 function renderTools(ledgerId: string | null) {
   const ledgerValue: LedgerValue = {
     status: ledgerId ? 'ready' : 'loading',
@@ -131,11 +116,9 @@ beforeEach(() => {
 })
 
 describe('useBudgetPaceTools', () => {
-  it('registers both tools on document.modelContext', () => {
+  it('registers both tools on document.modelContext', async () => {
     renderTools('ledger-1')
-    const names = modelContext()
-      .listTools()
-      .map((t) => t.name)
+    const names = await registeredToolNames()
     expect(names).toEqual(expect.arrayContaining(['budget_pace_overview', 'budget_pace_category']))
   })
 

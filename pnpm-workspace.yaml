@@ -11,4 +11,4 @@ minimumReleaseAgeExclude:
   - '@voidzero-dev/vite-plus-win32-x64-msvc@0.2.0'
   - vite-plus@0.2.0
 patchedDependencies:
-  '@mcp-b/global@3.0.0': patches/@mcp-b__global@3.0.0.patch
+  '@mcp-b/global@4.0.0': patches/@mcp-b__global@4.0.0.patch

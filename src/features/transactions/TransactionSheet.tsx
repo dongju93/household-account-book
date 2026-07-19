@@ -2,12 +2,14 @@ import { useId, useState } from 'react'
 
 import { useValidatedSubmit } from '../../app/useValidatedSubmit'
 import { createTransaction, updateTransaction } from '../../data/transactions'
+import type { NlTxnDraftNormalized } from '../../domain/ai/nlTxnDraft'
 import { FUND_TYPE_ITEMS } from '../../domain/fundType'
 import type { FundType } from '../../domain/fundType'
 import type { Category, Transaction } from '../../domain/types'
 import { validateTransactionInput } from '../../domain/validation'
 import { todayISO } from '../../lib/month'
 import { BottomSheet, Button, Chip, ErrorBanner, Segmented, TextInput, Toggle } from '../../ui'
+import { NlDraftField } from './NlDraftField'
 
 /**
  * Create or edit a transaction. In create mode it offers 저장 후 계속 입력, which
@@ -39,6 +41,8 @@ export function TransactionSheet({
   const [date, setDate] = useState(transaction?.txnDate ?? todayISO())
   const [memo, setMemo] = useState(transaction?.memo ?? '')
   const [keepOpen, setKeepOpen] = useState(false)
+  // Remount key for the NL field: bumping it clears text/banner/warnings after 저장 후 계속.
+  const [nlGeneration, setNlGeneration] = useState(0)
   const { errors, submitError, saving, run } = useValidatedSubmit()
   const amountErrorId = useId()
   const categoryErrorId = useId()
@@ -49,6 +53,21 @@ export function TransactionSheet({
   function changeType(next: FundType) {
     setType(next)
     setCategoryId('')
+  }
+
+  // Prefill only fields the draft resolved; null fields keep what the user typed.
+  // A resolved type replaces the category selection wholesale so a chip from the
+  // previous 구분 can never linger against the new one.
+  function applyNlDraft(draft: NlTxnDraftNormalized) {
+    if (draft.type) {
+      setType(draft.type)
+      setCategoryId(draft.categoryId ?? '')
+    } else if (draft.categoryId) {
+      setCategoryId(draft.categoryId)
+    }
+    if (draft.amount != null) setAmount(String(draft.amount))
+    if (draft.date) setDate(draft.date)
+    if (draft.memo != null) setMemo(draft.memo)
   }
 
   async function handleSubmit() {
@@ -76,6 +95,7 @@ export function TransactionSheet({
           setAmount('')
           setMemo('')
           setCategoryId('')
+          setNlGeneration((g) => g + 1)
         }
       },
     )
@@ -85,6 +105,15 @@ export function TransactionSheet({
   return (
     <BottomSheet open={open} onClose={onClose} title={editing ? '거래 수정' : '거래 추가'}>
       <div className="flex flex-col gap-3">
+        {!editing && open && (
+          <NlDraftField
+            key={nlGeneration}
+            ledgerId={ledgerId}
+            categories={categories}
+            onDraft={applyNlDraft}
+          />
+        )}
+
         {editing && transaction.source === 'recurring' && (
           <p className="rounded-[10px] bg-fill1 px-3 py-2 text-[11px] text-ink2">
             고정 항목에서 생성된 거래입니다. 이 달의 내역만 수정됩니다.
