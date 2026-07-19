@@ -1,0 +1,203 @@
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+
+import type { MonthCloseReviewData } from '../../ai/loadMonthCloseForNarrative'
+import type { AiGatewayOkResponse, MonthCloseNarrativeResult } from '../../ai/types'
+import { AuthContext, type AuthValue } from '../../auth/authContext'
+import type { AiUserSettings } from '../../data/aiSettings'
+import { addMonths, currentYearMonth, monthKey } from '../../lib/month'
+
+vi.mock('../../lib/supabase', () => ({ supabase: {} }))
+vi.mock('../../data/aiSettings', () => ({ getAiUserSettings: vi.fn() }))
+vi.mock('../../ai/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../ai/client')>()
+  return { ...actual, invokeAiFeature: vi.fn() }
+})
+vi.mock('../../ai/loadMonthCloseForNarrative', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../ai/loadMonthCloseForNarrative')>()
+  return { ...actual, loadMonthCloseForNarrative: vi.fn() }
+})
+
+import { AiClientError, invokeAiFeature } from '../../ai/client'
+import { loadMonthCloseForNarrative } from '../../ai/loadMonthCloseForNarrative'
+import { getAiUserSettings } from '../../data/aiSettings'
+import { MonthCloseSection } from './MonthCloseSection'
+
+const mockedInvoke = vi.mocked(invokeAiFeature)
+const mockedLoad = vi.mocked(loadMonthCloseForNarrative)
+const mockedSettings = vi.mocked(getAiUserSettings)
+
+const USER_ID = 'user-1'
+const LEDGER_ID = 'ledger-1'
+const PAST = addMonths(currentYearMonth(), -1)
+const PAST_KEY = monthKey(PAST.year, PAST.month)
+
+const REVIEW: MonthCloseReviewData = {
+  month: PAST_KEY,
+  needsCheck: [
+    {
+      kind: 'over_budget',
+      label: '식비 예산 5만 원 초과',
+      nav: { month: PAST_KEY, categoryId: 'food' },
+    },
+  ],
+  forReference: [
+    { kind: 'under_saving_goal', label: '비상금 목표 미달', nav: { month: PAST_KEY } },
+  ],
+  noIssueSummary: { categoriesChecked: 2, transactionsChecked: 10 },
+  truncated: false,
+}
+
+const EMPTY_REVIEW: MonthCloseReviewData = {
+  month: PAST_KEY,
+  needsCheck: [],
+  forReference: [],
+  noIssueSummary: { categoriesChecked: 2, transactionsChecked: 10 },
+  truncated: false,
+}
+
+function aiSettings(enabled: boolean): AiUserSettings {
+  return { userId: USER_ID, inAppAiEnabled: enabled, shareMemoWithAi: true, updatedAt: null }
+}
+
+function okResponse(
+  result: MonthCloseNarrativeResult,
+  cached = false,
+): AiGatewayOkResponse<MonthCloseNarrativeResult> {
+  return {
+    ok: true,
+    feature: 'month_close_narrative',
+    result,
+    model: 'grok-4.3',
+    usage: { promptTokens: 200, completionTokens: 60 },
+    quota: { remainingDaily: 4, remainingMonthly: 19 },
+    cached,
+  }
+}
+
+function renderSection(ym = PAST) {
+  const auth: AuthValue = {
+    status: 'authed',
+    user: { id: USER_ID } as AuthValue['user'],
+    session: null,
+    signIn: async () => ({}),
+    signUp: async () => ({}),
+    signOut: async () => {},
+  }
+  return render(
+    <AuthContext.Provider value={auth}>
+      <MonthCloseSection ledgerId={LEDGER_ID} ym={ym} />
+    </AuthContext.Provider>,
+  )
+}
+
+async function expandSection(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByText('월 마감 점검'))
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  mockedSettings.mockResolvedValue(aiSettings(true))
+  mockedLoad.mockResolvedValue(REVIEW)
+})
+
+describe('MonthCloseSection (S07 / PR-7)', () => {
+  it('renders nothing for the in-progress month', async () => {
+    renderSection(currentYearMonth())
+    await waitFor(() => expect(mockedSettings).toHaveBeenCalled())
+    expect(screen.queryByText('월 마감 점검')).not.toBeInTheDocument()
+    expect(mockedLoad).not.toHaveBeenCalled()
+  })
+
+  it('renders nothing and never loads when opted out', async () => {
+    mockedSettings.mockResolvedValue(aiSettings(false))
+    renderSection()
+    await waitFor(() => expect(mockedSettings).toHaveBeenCalled())
+    expect(screen.queryByText('월 마감 점검')).not.toBeInTheDocument()
+    expect(mockedLoad).not.toHaveBeenCalled()
+    expect(mockedInvoke).not.toHaveBeenCalled()
+  })
+
+  it('starts collapsed: no loader call until expanded', async () => {
+    const user = userEvent.setup()
+    renderSection()
+
+    await screen.findByText('월 마감 점검')
+    expect(mockedLoad).not.toHaveBeenCalled()
+
+    await expandSection(user)
+    await waitFor(() => expect(mockedLoad).toHaveBeenCalledWith(LEDGER_ID, PAST))
+  })
+
+  it('never calls the gateway while the review loader is still pending (ready gate)', async () => {
+    const user = userEvent.setup()
+    mockedLoad.mockReturnValue(new Promise(() => {}))
+    renderSection()
+
+    await expandSection(user)
+
+    await screen.findByText('점검 데이터를 불러오는 중…')
+    expect(mockedInvoke).not.toHaveBeenCalled()
+  })
+
+  it('sends findings only (kind/label, no nav) with a dataVersionHash, then renders narrative + rows', async () => {
+    const user = userEvent.setup()
+    mockedInvoke.mockResolvedValue(
+      okResponse({ narrative: '지난달은 식비 초과가 있었어요.', groundedMonth: PAST_KEY }),
+    )
+    renderSection()
+
+    await expandSection(user)
+
+    await screen.findByText('지난달은 식비 초과가 있었어요.')
+    expect(screen.getByText('식비 예산 5만 원 초과')).toBeInTheDocument()
+    expect(screen.getByText('비상금 목표 미달')).toBeInTheDocument()
+    expect(mockedInvoke).toHaveBeenCalledWith({
+      feature: 'month_close_narrative',
+      ledgerId: LEDGER_ID,
+      input: {
+        month: PAST_KEY,
+        needsCheck: [{ kind: 'over_budget', label: '식비 예산 5만 원 초과' }],
+        forReference: [{ kind: 'under_saving_goal', label: '비상금 목표 미달' }],
+        truncated: false,
+      },
+      dataVersionHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+    })
+  })
+
+  it('rejects a narrative grounded to a different month', async () => {
+    const user = userEvent.setup()
+    mockedInvoke.mockResolvedValue(okResponse({ narrative: '요약', groundedMonth: '2020-01' }))
+    renderSection()
+
+    await expandSection(user)
+
+    await screen.findByText('응답이 요청한 월과 일치하지 않습니다.')
+    expect(screen.queryByText('요약')).not.toBeInTheDocument()
+  })
+
+  it('keeps domain finding rows but hides the narrative quietly on flag_off', async () => {
+    const user = userEvent.setup()
+    mockedInvoke.mockRejectedValue(new AiClientError('flag_off'))
+    renderSection()
+
+    await expandSection(user)
+
+    await screen.findByText('식비 예산 5만 원 초과')
+    expect(screen.queryByText('다시 생성')).not.toBeInTheDocument()
+    expect(screen.queryByText(/일시적으로 사용할 수 없습니다/)).not.toBeInTheDocument()
+  })
+
+  it('short-circuits to a domain no-issue line without any gateway call', async () => {
+    const user = userEvent.setup()
+    mockedLoad.mockResolvedValue(EMPTY_REVIEW)
+    renderSection()
+
+    await expandSection(user)
+
+    await screen.findByText(/특이사항이 없습니다/)
+    expect(screen.getByText(/거래 10건 점검/)).toBeInTheDocument()
+    expect(mockedInvoke).not.toHaveBeenCalled()
+  })
+})

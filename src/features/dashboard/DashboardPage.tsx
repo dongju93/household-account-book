@@ -26,6 +26,7 @@ import { useBudgetPaceTools } from '../../webmcp/useBudgetPaceTools'
 import { AchievementList } from './AchievementList'
 import { AiInsightCard } from './AiInsightCard'
 import { DashboardCharts } from './DashboardCharts'
+import { MonthCloseSection } from './MonthCloseSection'
 import { SummaryCards } from './SummaryCards'
 
 const TREND_MONTHS = 6
@@ -106,6 +107,7 @@ export function DashboardPage() {
           <>
             <SummaryCards summary={summary} />
             {ledgerId && <AiInsightCard ledgerId={ledgerId} input={insightInput} tips={tips} />}
+            {ledgerId && <MonthCloseSection ledgerId={ledgerId} ym={ym} />}
             <AchievementList
               rows={achievements}
               paceByCategoryId={paceLookup}
