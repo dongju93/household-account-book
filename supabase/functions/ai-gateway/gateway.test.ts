@@ -267,11 +267,7 @@ describe('S02 ai-gateway acceptance', () => {
     const json = await res.json()
     expect(json.ok).toBe(true)
     expect(json.cached).toBe(false)
-    expect(json.result.bullets).toEqual([
-      '재생성 불릿 1',
-      '재생성 불릿 2',
-      '재생성 불릿 3',
-    ])
+    expect(json.result.bullets).toEqual(['재생성 불릿 1', '재생성 불릿 2', '재생성 불릿 3'])
     expect(deps.claims).toBe(1)
     expect(deps.xaiCalls).toBe(1)
     expect(deps.settles).toBe(1)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import { buildSavingTipTemplates, type TipAchievement } from './savingTipTemplates'
+import { buildSavingTipTemplates, pickSavingTip, type TipAchievement } from './savingTipTemplates'
 
 const foodOver: TipAchievement = {
   name: '식비',
@@ -47,16 +47,17 @@ const baseSummary = {
 }
 
 describe('buildSavingTipTemplates', () => {
-  it('closed month names the category with the largest overspend', () => {
+  it('closed month names the category with the largest overspend first', () => {
     const tips = buildSavingTipTemplates({
       period: 'closed',
       summary: baseSummary,
       achievements: [busOver, foodOver],
     })
 
-    expect(tips).toEqual([
+    expect(tips[0]).toBe(
       '이번 달 가장 큰 절약 필요 항목은 식비입니다. 예산을 ₩50,000 초과했으므로 다음 달 한도를 우선 재조정하세요.',
-    ])
+    )
+    expect(tips.some((t) => t.includes('예산 초과 2곳') && t.includes('식비'))).toBe(true)
   })
 
   it('closed month falls back to the largest expense when nothing exceeded budget', () => {
@@ -70,12 +71,12 @@ describe('buildSavingTipTemplates', () => {
       ],
     })
 
-    expect(tips).toEqual([
+    expect(tips[0]).toBe(
       '이번 달 가장 큰 절약 후보는 주거(₩900,000, 지출의 45%)입니다. 다음 달 예산을 짤 때 이 항목의 한도를 먼저 점검하세요.',
-    ])
+    )
   })
 
-  it('current month excludes over-budget categories and names an adjustable warning', () => {
+  it('current month excludes over-budget categories and names an adjustable warning first', () => {
     const tips = buildSavingTipTemplates({
       period: 'current',
       summary: { ...baseSummary, balance: -100_000 },
@@ -86,11 +87,12 @@ describe('buildSavingTipTemplates', () => {
       ],
     })
 
-    expect(tips).toEqual([
+    expect(tips[0]).toBe(
       '남은 기간 가장 먼저 절약할 항목은 여가입니다. 예산이 ₩20,000 남았으므로 추가 지출을 이 범위 안에서 관리하세요.',
-    ])
+    )
     expect(tips[0]).not.toContain('식비')
-    expect(tips[0]).not.toContain('초과')
+    // Pool still includes an overspend context tip for rotation.
+    expect(tips.some((t) => t.includes('식비') && t.includes('초과'))).toBe(true)
   })
 
   it('current month selects the largest non-over expense when no category is at warning', () => {
@@ -104,12 +106,12 @@ describe('buildSavingTipTemplates', () => {
       ],
     })
 
-    expect(tips).toEqual([
+    expect(tips[0]).toBe(
       '남은 기간 절약 우선 항목은 대중교통(₩90,000, 지출의 10%)입니다. 이미 쓴 금액보다 추가 지출을 줄이는 데 집중하세요.',
-    ])
+    )
   })
 
-  it('current month emits no tip when every spent category is already over budget', () => {
+  it('current month still emits an overspend tip when every spent category is already over budget', () => {
     const tips = buildSavingTipTemplates({
       period: 'current',
       summary: baseSummary,
@@ -120,6 +122,22 @@ describe('buildSavingTipTemplates', () => {
       ],
     })
 
-    expect(tips).toEqual([])
+    expect(tips.length).toBeGreaterThan(0)
+    expect(tips.some((t) => t.includes('예산 초과 2곳') && t.includes('식비'))).toBe(true)
+  })
+})
+
+describe('pickSavingTip', () => {
+  it('rotates through the pool and wraps', () => {
+    const pool = ['a', 'b', 'c']
+    expect(pickSavingTip(pool, 0)).toBe('a')
+    expect(pickSavingTip(pool, 1)).toBe('b')
+    expect(pickSavingTip(pool, 2)).toBe('c')
+    expect(pickSavingTip(pool, 3)).toBe('a')
+    expect(pickSavingTip(pool, -1)).toBe('c')
+  })
+
+  it('returns null for an empty pool', () => {
+    expect(pickSavingTip([], 0)).toBeNull()
   })
 })

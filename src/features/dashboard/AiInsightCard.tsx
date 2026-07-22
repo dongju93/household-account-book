@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import { invokeAiFeature, isAiClientError } from '../../ai/client'
 import { dataVersionHash, stableStringify } from '../../ai/hash'
 import {
@@ -9,6 +11,8 @@ import { useAsyncData } from '../../app/useAsyncData'
 import { useAuth } from '../../auth/useAuth'
 import { getAiUserSettings } from '../../data/aiSettings'
 import { describeError } from '../../data/errors'
+import { polishInsightBullets } from '../../domain/ai/polishInsightText'
+import { pickSavingTip } from '../../domain/ai/savingTipTemplates'
 
 /**
  * AI 월간 인사이트 카드 (S06 / PR-6, spec §5.3 + §5.11).
@@ -19,8 +23,9 @@ import { describeError } from '../../data/errors'
  * Hidden entirely when the user opted out (Edge re-enforces server-side).
  * `flag_off` (ops kill switch) hides the AI bullets quietly but keeps the
  * zero-cost template tips, which never duplicate `formatPaceHint` sentences.
- * 다시 생성 re-invokes: same aggregates + `MONTH_INSIGHT_PROMPT_REV` → cache
- * hit (no quota); data or prompt-rev change spends quota.
+ * 다시 생성 re-invokes AI (same aggregates + `MONTH_INSIGHT_PROMPT_REV` → cache
+ * hit, no quota) and advances the offline tip rotation so the tip always
+ * changes when the pool has more than one candidate.
  */
 
 type InsightState =
@@ -36,10 +41,12 @@ export function AiInsightCard({
 }: {
   ledgerId: string
   input: MonthInsightInput
+  /** Ordered offline tip pool; card shows one and rotates on 「다시 생성」. */
   tips: readonly string[]
 }) {
   const { user } = useAuth()
   const userId = user?.id
+  const [tipRotation, setTipRotation] = useState(0)
   const { data: settings } = useAsyncData(
     () => (userId ? getAiUserSettings(userId) : Promise.resolve(null)),
     [userId],
@@ -77,7 +84,11 @@ export function AiInsightCard({
       ) {
         return { kind: 'error', message: '응답 형식이 올바르지 않습니다.' }
       }
-      return { kind: 'ok', bullets, cached: res.cached === true }
+      return {
+        kind: 'ok',
+        bullets: polishInsightBullets(bullets),
+        cached: res.cached === true,
+      }
     } catch (err) {
       if (isAiClientError(err) && err.code === 'flag_off') return { kind: 'hidden' }
       return {
@@ -92,7 +103,15 @@ export function AiInsightCard({
 
   const state: InsightState = insight ?? { kind: 'idle' }
   const aiHidden = state.kind === 'hidden'
-  if (aiHidden && tips.length === 0) return null
+  const activeTip = pickSavingTip(tips, tipRotation)
+  if (aiHidden && !activeTip) return null
+
+  const handleRegenerate = () => {
+    // Tip pool advances even when AI is a free cache hit — otherwise the button
+    // looks dead for offline tips (user report: 절약 팁이 다시 생성되지 않음).
+    if (tips.length > 1) setTipRotation((n) => n + 1)
+    reload()
+  }
 
   return (
     <section className="rounded-[16px] border border-line bg-paper px-4 py-3.5">
@@ -101,7 +120,7 @@ export function AiInsightCard({
         {!aiHidden && (
           <button
             type="button"
-            onClick={reload}
+            onClick={handleRegenerate}
             disabled={loading}
             className="text-[11.5px] font-semibold text-ink3 disabled:opacity-50"
           >
@@ -125,16 +144,10 @@ export function AiInsightCard({
           <p className="text-[11.5px] text-danger">{state.message}</p>
         ) : null)}
 
-      {tips.length > 0 && (
+      {activeTip && (
         <div className={aiHidden ? undefined : 'mt-2.5 border-t border-line-soft pt-2'}>
           <div className="mb-1 text-[11px] font-semibold text-ink3">절약 팁</div>
-          <ul className="flex flex-col gap-1">
-            {tips.map((t) => (
-              <li key={t} className="tnum text-[12px] leading-relaxed text-ink2">
-                {t}
-              </li>
-            ))}
-          </ul>
+          <p className="tnum text-[12px] leading-relaxed text-ink2">{activeTip}</p>
         </div>
       )}
     </section>

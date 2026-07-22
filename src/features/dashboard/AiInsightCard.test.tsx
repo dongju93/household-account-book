@@ -38,7 +38,10 @@ const INPUT: MonthInsightInput = {
   topExpenses: [{ name: '식비', amount: 400_000, pct: 33 }],
 }
 
-const TIPS = ['예산 초과 카테고리 1개 (최대 초과: 식비).']
+const TIPS = [
+  '남은 기간 가장 먼저 절약할 항목은 여가입니다. 예산이 ₩20,000 남았으므로 추가 지출을 이 범위 안에서 관리하세요.',
+  '예산 초과 2곳 · 최대는 식비(₩50,000). 초과 큰 항목부터 한도를 다시 잡으세요.',
+]
 
 function aiSettings(enabled: boolean): AiUserSettings {
   return { userId: USER_ID, inAppAiEnabled: enabled, shareMemoWithAi: true, updatedAt: null }
@@ -129,17 +132,43 @@ describe('AiInsightCard (S06 / PR-6)', () => {
     expect(screen.getByText(TIPS[0])).toBeInTheDocument()
   })
 
-  it('re-invokes on 다시 생성 (cache decides whether quota is spent)', async () => {
+  it('re-invokes on 다시 생성 and rotates the offline tip', async () => {
     const user = userEvent.setup()
     mockedInvoke.mockResolvedValue(
-      okResponse({ bullets: ['불릿1', '불릿2'], groundedMonth: '2026-07' }, true),
+      okResponse({ bullets: ['불릿1', '불릿2', '불릿3'], groundedMonth: '2026-07' }, true),
     )
     renderCard()
 
     await screen.findByText('불릿1')
+    expect(screen.getByText(TIPS[0])).toBeInTheDocument()
+    expect(screen.queryByText(TIPS[1])).not.toBeInTheDocument()
     expect(mockedInvoke).toHaveBeenCalledTimes(1)
+
     await user.click(screen.getByText('다시 생성'))
     await waitFor(() => expect(mockedInvoke).toHaveBeenCalledTimes(2))
+    expect(screen.getByText(TIPS[1])).toBeInTheDocument()
+    expect(screen.queryByText(TIPS[0])).not.toBeInTheDocument()
+  })
+
+  it('polishes leaked English field names and bare amounts in bullets', async () => {
+    mockedInvoke.mockResolvedValue(
+      okResponse({
+        bullets: [
+          '식비가 460100원으로 remainingBudget이 -10100원, dailyAllowance 0원 상태입니다. 남은 기간 추가 지출을 멈추세요.',
+          '모임 remainingBudget이 가장 크게 마이너스입니다. 규모를 하루 0원으로 제한하세요.',
+          'balance가 흑자이므로 구독 초과분을 메우는 데 일부를 배정하세요.',
+        ],
+        groundedMonth: '2026-07',
+      }),
+    )
+    renderCard()
+
+    await screen.findByText(/₩460,100/)
+    expect(screen.getByText(/₩460,100.*-₩10,100.*하루 허용액/)).toBeInTheDocument()
+    expect(screen.getByText(/모임 잔여 예산이/)).toBeInTheDocument()
+    expect(screen.getByText(/수지가 흑자/)).toBeInTheDocument()
+    expect(screen.queryByText(/remainingBudget/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/dailyAllowance/)).not.toBeInTheDocument()
   })
 
   it('rejects a response grounded to a different month', async () => {
