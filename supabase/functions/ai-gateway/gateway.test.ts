@@ -228,8 +228,11 @@ describe('S02 ai-gateway acceptance', () => {
   it('캐시 히트 시 quota 미차감 (cacheable feature)', async () => {
     const deps = makeDeps({
       lookupCache: async () => ({
-        // Schema requires 2–4 bullets; single-item rows are invalid and must not hit.
-        result: { bullets: ['캐시 불릿 1', '캐시 불릿 2'], groundedMonth: '2026-07' },
+        // Schema requires 3–4 bullets; shorter rows are invalid and must not hit.
+        result: {
+          bullets: ['캐시 불릿 1', '캐시 불릿 2', '캐시 불릿 3'],
+          groundedMonth: '2026-07',
+        },
         model: 'grok-4.5',
       }),
     })
@@ -251,7 +254,7 @@ describe('S02 ai-gateway acceptance', () => {
       }),
       callXai: async () => ({
         content: {
-          bullets: ['재생성 불릿 1', '재생성 불릿 2'],
+          bullets: ['재생성 불릿 1', '재생성 불릿 2', '재생성 불릿 3'],
           groundedMonth: '2026-07',
         },
         model: 'grok-4.5',
@@ -264,7 +267,11 @@ describe('S02 ai-gateway acceptance', () => {
     const json = await res.json()
     expect(json.ok).toBe(true)
     expect(json.cached).toBe(false)
-    expect(json.result.bullets).toEqual(['재생성 불릿 1', '재생성 불릿 2'])
+    expect(json.result.bullets).toEqual([
+      '재생성 불릿 1',
+      '재생성 불릿 2',
+      '재생성 불릿 3',
+    ])
     expect(deps.claims).toBe(1)
     expect(deps.xaiCalls).toBe(1)
     expect(deps.settles).toBe(1)
@@ -419,7 +426,7 @@ describe('feature matrix sanity', () => {
 describe('validateFeatureResult (structured output schema)', () => {
   it('accepts a well-formed month_insight result', () => {
     const r = validateFeatureResult('month_insight', {
-      bullets: ['a', 'b'],
+      bullets: ['a', 'b', 'c'],
       groundedMonth: '2026-07',
     })
     expect(r.ok).toBe(true)
@@ -435,7 +442,7 @@ describe('validateFeatureResult (structured output schema)', () => {
 
   it('rejects too few bullets', () => {
     const r = validateFeatureResult('month_insight', {
-      bullets: ['only-one'],
+      bullets: ['first', 'second'],
       groundedMonth: '2026-07',
     })
     expect(r.ok).toBe(false)

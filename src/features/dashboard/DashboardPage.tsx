@@ -79,6 +79,7 @@ export function DashboardPage() {
     breakdown,
   })
   const tips = buildSavingTipTemplates({
+    period: showPace ? 'current' : 'closed',
     summary,
     achievements,
     topExpenses: breakdown.slice(0, 5).map((r) => ({

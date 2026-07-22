@@ -327,8 +327,8 @@ function validateNlTxnParseResult(result: unknown): ResultValidation {
 
 function validateMonthInsightResult(result: unknown): ResultValidation {
   if (!isRecord(result)) return resultFail('month_insight 결과는 객체여야 합니다.')
-  if (!isStringArray(result.bullets, 2, 4)) {
-    return resultFail('bullets는 2~4개의 문자열 배열이어야 합니다.')
+  if (!isStringArray(result.bullets, 3, 4)) {
+    return resultFail('bullets는 3~4개의 문자열 배열이어야 합니다.')
   }
   if (typeof result.groundedMonth !== 'string') {
     return resultFail('groundedMonth는 문자열이어야 합니다.')
