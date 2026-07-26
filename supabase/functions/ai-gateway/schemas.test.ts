@@ -80,3 +80,40 @@ describe('monthInsightPrompt', () => {
     expect(schema.properties.bullets).toMatchObject({ minItems: 2, maxItems: 4 })
   })
 })
+
+describe('monthClosePrompt', () => {
+  it('turns findings into prioritized decisions instead of restating the list', () => {
+    const prompt = buildFeaturePrompt('month_close_narrative', {
+      month: '2026-06',
+      needsCheck: [
+        {
+          kind: 'duplicate_candidate',
+          label: '2026-06-14 식비 ₩32,000 거래가 2건 반복되었습니다.',
+        },
+        { kind: 'over_budget', label: '식비 카테고리가 예산을 ₩120,000 초과했습니다.' },
+      ],
+      forReference: [
+        { kind: 'under_saving_goal', label: '비상금 저축 목표에 ₩200,000 못 미쳤습니다.' },
+      ],
+      truncated: false,
+    })
+    const schema = prompt.schema as {
+      required: string[]
+      properties: {
+        summary: { minLength: number; maxLength: number }
+        actions: { minItems: number; maxItems: number }
+      }
+    }
+
+    expect(prompt.system).toContain('입력 항목을 다시 나열하거나 요약하는 것이 아니라')
+    expect(prompt.system).toContain('왜 우선인지 → 무엇을 확인하거나 바꿀지 → 언제 완료로 볼지')
+    expect(prompt.system).toContain('중복이라고 단정하지 말고')
+    expect(prompt.system).toContain('반복 지출과 일회성 지출을 구분')
+    expect(prompt.system).toContain('서로 다른 finding 사이의 인과관계를 만들지 않습니다')
+    expect(prompt.system).toContain('막연한 표현')
+    expect(prompt.user).toContain('<month_close_data>')
+    expect(schema.required).toEqual(['summary', 'actions', 'groundedMonth'])
+    expect(schema.properties.summary).toMatchObject({ minLength: 25, maxLength: 180 })
+    expect(schema.properties.actions).toMatchObject({ minItems: 1, maxItems: 3 })
+  })
+})

@@ -490,6 +490,28 @@ describe('validateFeatureResult (structured output schema)', () => {
     expect(r.ok).toBe(true)
   })
 
+  it('accepts an actionable month-close decision plan', () => {
+    const r = validateFeatureResult('month_close_narrative', {
+      summary:
+        '이번 마감은 중복 거래 여부를 먼저 확정한 뒤 식비 초과의 성격을 구분하는 순서가 핵심입니다.',
+      actions: [
+        '6월 14일 식비 거래가 실제 이중 입력인지 결제 내역과 대조하고, 중복이면 한 건을 삭제하며 정상 거래면 유지 사유를 메모하면 확인 완료입니다.',
+        '식비 내역을 반복 지출과 일회성 지출로 나누어 보고, 다음 달 시작 전 반복 지출 규칙을 정하거나 일회성 비용을 반영해 예산 조정 여부를 확정하세요.',
+      ],
+      groundedMonth: '2026-06',
+    })
+    expect(r.ok).toBe(true)
+  })
+
+  it('rejects a month-close result that falls back to a short information list', () => {
+    const r = validateFeatureResult('month_close_narrative', {
+      summary: '식비 초과, 저축 미달',
+      actions: ['식비를 주의하세요.'],
+      groundedMonth: '2026-06',
+    })
+    expect(r.ok).toBe(false)
+  })
+
   it('accepts nl_txn_parse with null draft fields', () => {
     const r = validateFeatureResult('nl_txn_parse', {
       draft: {

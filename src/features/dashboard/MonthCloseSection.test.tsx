@@ -24,7 +24,7 @@ vi.mock('../../ai/loadMonthCloseForNarrative', async (importOriginal) => {
 import { AiClientError, invokeAiFeature } from '../../ai/client'
 import { loadMonthCloseForNarrative } from '../../ai/loadMonthCloseForNarrative'
 import { getAiUserSettings } from '../../data/aiSettings'
-import { MonthCloseSection, summaryLines } from './MonthCloseSection'
+import { MonthCloseSection } from './MonthCloseSection'
 
 const mockedInvoke = vi.mocked(invokeAiFeature)
 const mockedLoad = vi.mocked(loadMonthCloseForNarrative)
@@ -173,13 +173,28 @@ describe('MonthCloseSection (S07 / PR-7)', () => {
   it('sends findings only (kind/label, no nav) with a dataVersionHash, then renders narrative + rows', async () => {
     const user = userEvent.setup()
     mockedInvoke.mockResolvedValue(
-      okResponse({ narrative: '지난달은 식비 초과가 있었어요.', groundedMonth: PAST_KEY }),
+      okResponse({
+        summary:
+          '이번 마감은 식비 초과 내역을 먼저 구분한 뒤 비상금 실행 계획을 확정하는 것이 핵심입니다.',
+        actions: [
+          '식비 내역을 반복 지출과 일회성 지출로 나누어 보고, 다음 달 시작 전에 지출 규칙 또는 예산 조정 여부를 확정하세요.',
+        ],
+        groundedMonth: PAST_KEY,
+      }),
     )
     renderSection()
 
     await expandSection(user)
 
-    await screen.findByText('지난달은 식비 초과가 있었어요.')
+    await screen.findByText(
+      '이번 마감은 식비 초과 내역을 먼저 구분한 뒤 비상금 실행 계획을 확정하는 것이 핵심입니다.',
+    )
+    expect(
+      screen.getByText(
+        '식비 내역을 반복 지출과 일회성 지출로 나누어 보고, 다음 달 시작 전에 지출 규칙 또는 예산 조정 여부를 확정하세요.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('AI가 제안한 마감 순서')).toBeInTheDocument()
     expect(screen.getByText('식비 예산 5만 원 초과')).toBeInTheDocument()
     expect(screen.getByText('비상금 목표 미달')).toBeInTheDocument()
     expect(mockedInvoke).toHaveBeenCalledWith({
@@ -197,13 +212,23 @@ describe('MonthCloseSection (S07 / PR-7)', () => {
 
   it('rejects a narrative grounded to a different month', async () => {
     const user = userEvent.setup()
-    mockedInvoke.mockResolvedValue(okResponse({ narrative: '요약', groundedMonth: '2020-01' }))
+    mockedInvoke.mockResolvedValue(
+      okResponse({
+        summary: '이번 마감에서 먼저 확인할 항목과 다음 달에 조정할 항목을 순서대로 정리했습니다.',
+        actions: ['식비 내역을 확인한 뒤 다음 달 시작 전에 지출 규칙을 하나 정하면 완료입니다.'],
+        groundedMonth: '2020-01',
+      }),
+    )
     renderSection()
 
     await expandSection(user)
 
     await screen.findByText('응답이 요청한 월과 일치하지 않습니다.')
-    expect(screen.queryByText('요약')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        '이번 마감에서 먼저 확인할 항목과 다음 달에 조정할 항목을 순서대로 정리했습니다.',
+      ),
+    ).not.toBeInTheDocument()
   })
 
   it('keeps domain finding rows but hides the narrative quietly on flag_off', async () => {
@@ -228,28 +253,5 @@ describe('MonthCloseSection (S07 / PR-7)', () => {
     await screen.findByText(/특이사항이 없습니다/)
     expect(screen.getByText(/거래 10건 점검/)).toBeInTheDocument()
     expect(mockedInvoke).not.toHaveBeenCalled()
-  })
-})
-
-describe('summaryLines', () => {
-  it('strips markdown bullet markers the model emits despite the prose prompt', () => {
-    expect(summaryLines('- 식비가 초과했습니다.\n- 주거에 메모가 없습니다.')).toEqual([
-      '식비가 초과했습니다.',
-      '주거에 메모가 없습니다.',
-    ])
-  })
-
-  it('accepts the other bullet glyphs and drops blank lines', () => {
-    expect(summaryLines('* 첫째 줄\n\n• 둘째 줄\n   ')).toEqual(['첫째 줄', '둘째 줄'])
-  })
-
-  it('leaves a genuine single paragraph as one line', () => {
-    expect(summaryLines('이번 달은 예산 안에서 마무리됐습니다.')).toEqual([
-      '이번 달은 예산 안에서 마무리됐습니다.',
-    ])
-  })
-
-  it('does not eat a hyphen that is part of the sentence', () => {
-    expect(summaryLines('2026-06월 지출입니다.')).toEqual(['2026-06월 지출입니다.'])
   })
 })

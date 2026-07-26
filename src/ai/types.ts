@@ -184,6 +184,13 @@ export interface MonthInsightResult {
  */
 export const MONTH_INSIGHT_PROMPT_REV = 10
 
+/**
+ * Bump when the Edge `month_close_narrative` prompt or output contract changes.
+ * Included in the client hash payload only so prompt-only deploys cannot reuse
+ * stale `ai_insight_cache` rows.
+ */
+export const MONTH_CLOSE_NARRATIVE_PROMPT_REV = 1
+
 export interface MonthCloseNarrativeInput {
   month: string
   needsCheck: { kind: string; label: string }[]
@@ -192,6 +199,7 @@ export interface MonthCloseNarrativeInput {
 }
 
 export interface MonthCloseNarrativeResult {
-  narrative: string
+  summary: string
+  actions: string[]
   groundedMonth: string
 }

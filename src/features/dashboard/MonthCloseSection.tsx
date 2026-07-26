@@ -6,7 +6,7 @@ import {
   buildMonthCloseNarrativeInput,
   loadMonthCloseForNarrative,
 } from '../../ai/loadMonthCloseForNarrative'
-import type { MonthCloseNarrativeResult } from '../../ai/types'
+import { MONTH_CLOSE_NARRATIVE_PROMPT_REV, type MonthCloseNarrativeResult } from '../../ai/types'
 import { useAsyncData } from '../../app/useAsyncData'
 import { useRefresh } from '../../app/useRefresh'
 import { useAuth } from '../../auth/useAuth'
@@ -38,7 +38,7 @@ import { ErrorBanner, Skeleton, SkeletonScreen, TextAction } from '../../ui'
 type NarrativeState =
   | { kind: 'idle' }
   | { kind: 'hidden' }
-  | { kind: 'ok'; narrative: string; cached: boolean }
+  | { kind: 'ok'; summary: string; actions: string[]; cached: boolean }
   | { kind: 'error'; message: string }
 
 export function MonthCloseSection({ ledgerId, ym }: { ledgerId: string; ym: YearMonth }) {
@@ -80,7 +80,10 @@ export function MonthCloseSection({ ledgerId, ym }: { ledgerId: string; ym: Year
     if (!review || findingsCount === 0) return { kind: 'idle' }
     try {
       const input = buildMonthCloseNarrativeInput(review)
-      const hash = await dataVersionHash(input)
+      const hash = await dataVersionHash({
+        promptRev: MONTH_CLOSE_NARRATIVE_PROMPT_REV,
+        input,
+      })
       const res = await invokeAiFeature<MonthCloseNarrativeResult>({
         feature: 'month_close_narrative',
         ledgerId,
@@ -90,7 +93,12 @@ export function MonthCloseSection({ ledgerId, ym }: { ledgerId: string; ym: Year
       if (res.result.groundedMonth !== review.month) {
         return { kind: 'error', message: '응답이 요청한 월과 일치하지 않습니다.' }
       }
-      return { kind: 'ok', narrative: res.result.narrative, cached: res.cached === true }
+      return {
+        kind: 'ok',
+        summary: res.result.summary,
+        actions: res.result.actions,
+        cached: res.cached === true,
+      }
     } catch (err) {
       if (isAiClientError(err) && err.code === 'flag_off') return { kind: 'hidden' }
       return {
@@ -173,10 +181,19 @@ export function MonthCloseSection({ ledgerId, ym }: { ledgerId: string; ym: Year
                     ) : narrState.kind === 'ok' ? (
                       <div className="flex flex-col gap-2 rounded-surface bg-fill1 p-3">
                         <div className="flex items-baseline justify-between gap-3">
-                          <span className="text-caption text-ink2">AI가 작성한 요약</span>
+                          <span className="text-caption text-ink2">AI가 제안한 마감 순서</span>
                           <TextAction onClick={regenerate}>다시 생성</TextAction>
                         </div>
-                        <SummaryText narrative={narrState.narrative} />
+                        <p className="text-body font-medium text-ink text-pretty">
+                          {narrState.summary}
+                        </p>
+                        <ul className="flex list-decimal flex-col gap-1 pl-4">
+                          {narrState.actions.map((action) => (
+                            <li key={action} className="text-body text-ink2 text-pretty">
+                              {action}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     ) : narrState.kind === 'error' ? (
                       <p className="text-caption text-status-danger">{narrState.message}</p>
@@ -194,39 +211,6 @@ export function MonthCloseSection({ ledgerId, ym }: { ledgerId: string; ym: Year
         </div>
       )}
     </section>
-  )
-}
-
-/**
- * Splits the model's summary into display lines, dropping any leading markdown
- * bullet marker. Exported for the test; pure string work, no domain meaning.
- */
-export function summaryLines(narrative: string): string[] {
-  return narrative
-    .split('\n')
-    .map((line) => line.replace(/^\s*[-*•]\s+/, '').trim())
-    .filter(Boolean)
-}
-
-/**
- * The prompt asks for prose, but the model routinely answers with a markdown
- * list. HTML collapses the newlines, so a single <p> rendered it as one run-on
- * paragraph with literal hyphens ("- 식비… - 주거…"). Render the bullets as an
- * actual list and let a genuine single paragraph stay a paragraph.
- */
-function SummaryText({ narrative }: { narrative: string }) {
-  const lines = summaryLines(narrative)
-  if (lines.length <= 1) {
-    return <p className="text-body text-ink2 text-pretty">{lines[0] ?? narrative}</p>
-  }
-  return (
-    <ul className="flex list-disc flex-col gap-1 pl-4">
-      {lines.map((line) => (
-        <li key={line} className="text-body text-ink2 text-pretty">
-          {line}
-        </li>
-      ))}
-    </ul>
   )
 }
 

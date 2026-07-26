@@ -368,11 +368,18 @@ function validateMonthInsightResult(result: unknown): ResultValidation {
 
 function validateMonthCloseNarrativeResult(result: unknown): ResultValidation {
   if (!isRecord(result)) return resultFail('month_close_narrative 결과는 객체여야 합니다.')
-  if (typeof result.narrative !== 'string') {
-    return resultFail('narrative는 문자열이어야 합니다.')
+  if (
+    typeof result.summary !== 'string' ||
+    result.summary.length < 25 ||
+    result.summary.length > 180
+  ) {
+    return resultFail('summary는 25~180자인 문자열이어야 합니다.')
   }
-  if (typeof result.groundedMonth !== 'string') {
-    return resultFail('groundedMonth는 문자열이어야 합니다.')
+  if (!isStringArray(result.actions, 1, 3, 35, 260)) {
+    return resultFail('actions는 35~260자인 문자열 1~3개여야 합니다.')
+  }
+  if (typeof result.groundedMonth !== 'string' || !MONTH_RE.test(result.groundedMonth)) {
+    return resultFail('groundedMonth는 YYYY-MM 형식이어야 합니다.')
   }
   return { ok: true }
 }
