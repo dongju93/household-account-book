@@ -257,17 +257,41 @@ function resultFail(message: string): ResultValidationErr {
   return { ok: false, message }
 }
 
-function isStringArray(v: unknown, min: number, max: number): v is string[] {
+function isStringArray(
+  v: unknown,
+  min: number,
+  max: number,
+  itemMinLength = 0,
+  itemMaxLength = Number.POSITIVE_INFINITY,
+): v is string[] {
   return (
     Array.isArray(v) &&
     v.length >= min &&
     v.length <= max &&
-    v.every((item) => typeof item === 'string')
+    v.every(
+      (item) =>
+        typeof item === 'string' && item.length >= itemMinLength && item.length <= itemMaxLength,
+    )
   )
 }
 
 function isNullableString(v: unknown): boolean {
   return v === null || typeof v === 'string'
+}
+
+const INVALID_MONTH_INSIGHT_ADVICE = [
+  /(?:예산\s*)?한도(?:를|만)?\s*초과분(?:\s*(?:인|만큼|규모로))?(?:\s*₩[\d,]+)?(?:\s*(?:만큼|규모로))?\s*(?:축소|삭감|줄이|낮추|재설계)/,
+  /초과분(?:\s*(?:인|만큼|규모로))?(?:\s*₩[\d,]+)?(?:\s*(?:만큼|규모로))?\s*(?:예산\s*)?한도(?:를|만)?\s*(?:축소|삭감|줄이|낮추|재설계)/,
+]
+
+function hasInvalidMonthInsightAdvice(bullets: string[]): boolean {
+  return bullets.some((bullet) =>
+    INVALID_MONTH_INSIGHT_ADVICE.some((pattern) => pattern.test(bullet)),
+  )
+}
+
+function hasExcessiveMoneyRepetition(bullets: string[]): boolean {
+  return bullets.some((bullet) => (bullet.match(/-?₩[\d,]+/g)?.length ?? 0) > 2)
 }
 
 /**
@@ -327,8 +351,14 @@ function validateNlTxnParseResult(result: unknown): ResultValidation {
 
 function validateMonthInsightResult(result: unknown): ResultValidation {
   if (!isRecord(result)) return resultFail('month_insight 결과는 객체여야 합니다.')
-  if (!isStringArray(result.bullets, 3, 4)) {
-    return resultFail('bullets는 3~4개의 문자열 배열이어야 합니다.')
+  if (!isStringArray(result.bullets, 2, 4, 35, 260)) {
+    return resultFail('bullets는 35~260자인 문자열 2~4개여야 합니다.')
+  }
+  if (hasExcessiveMoneyRepetition(result.bullets)) {
+    return resultFail('한 불릿에서 금액을 세 번 이상 반복할 수 없습니다.')
+  }
+  if (hasInvalidMonthInsightAdvice(result.bullets)) {
+    return resultFail('예산 한도와 실제 지출을 혼동한 조언은 허용되지 않습니다.')
   }
   if (typeof result.groundedMonth !== 'string') {
     return resultFail('groundedMonth는 문자열이어야 합니다.')

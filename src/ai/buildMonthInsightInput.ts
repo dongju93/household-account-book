@@ -24,6 +24,9 @@ export function buildMonthInsightInput(args: {
 }): MonthInsightInput {
   const { ym, summary, achievements, paceRows, breakdown } = args
   const caps = AI_LIMITS.monthInsight
+  const totalExpenseBudget = achievements
+    .filter((a) => a.type === 'expense')
+    .reduce((sum, a) => sum + a.target, 0)
 
   const input: MonthInsightInput = {
     month: monthKey(ym.year, ym.month),
@@ -40,6 +43,14 @@ export function buildMonthInsightInput(args: {
       target: a.target,
       actual: a.actual,
       status: a.status,
+      plannedExpenseSharePct:
+        a.type === 'expense' && totalExpenseBudget > 0
+          ? Math.round((a.target / totalExpenseBudget) * 100)
+          : null,
+      actualExpenseSharePct:
+        a.type === 'expense' && summary.totalExpense > 0
+          ? Math.round((a.actual / summary.totalExpense) * 100)
+          : null,
     })),
     topExpenses: breakdown.slice(0, caps.topExpensesMax).map((r) => ({
       name: r.name,

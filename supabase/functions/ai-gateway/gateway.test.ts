@@ -19,6 +19,11 @@ import { XaiError } from './xai.ts'
 
 const LEDGER = '11111111-1111-4111-8111-111111111111'
 const USER = '22222222-2222-4222-8222-222222222222'
+const VALID_INSIGHT_BULLETS = [
+  '쇼핑 지출은 입력된 목표와 실적을 비교해 다음 달 목표 이내로 맞추는 행동을 제안합니다.',
+  '저축은 수지와 목표까지 남은 금액 안에서 실제로 배정 가능한 범위만 안내합니다.',
+  '상위 지출 비중은 삭감 근거가 아니라 다음 달 중간 점검의 우선순위로만 활용합니다.',
+]
 
 function baseNlBody(over: Record<string, unknown> = {}) {
   return {
@@ -228,9 +233,9 @@ describe('S02 ai-gateway acceptance', () => {
   it('캐시 히트 시 quota 미차감 (cacheable feature)', async () => {
     const deps = makeDeps({
       lookupCache: async () => ({
-        // Schema requires 3–4 bullets; shorter rows are invalid and must not hit.
+        // Schema requires 2–4 bullets; this cached result is valid.
         result: {
-          bullets: ['캐시 불릿 1', '캐시 불릿 2', '캐시 불릿 3'],
+          bullets: VALID_INSIGHT_BULLETS,
           groundedMonth: '2026-07',
         },
         model: 'grok-4.5',
@@ -254,7 +259,7 @@ describe('S02 ai-gateway acceptance', () => {
       }),
       callXai: async () => ({
         content: {
-          bullets: ['재생성 불릿 1', '재생성 불릿 2', '재생성 불릿 3'],
+          bullets: VALID_INSIGHT_BULLETS,
           groundedMonth: '2026-07',
         },
         model: 'grok-4.5',
@@ -267,7 +272,7 @@ describe('S02 ai-gateway acceptance', () => {
     const json = await res.json()
     expect(json.ok).toBe(true)
     expect(json.cached).toBe(false)
-    expect(json.result.bullets).toEqual(['재생성 불릿 1', '재생성 불릿 2', '재생성 불릿 3'])
+    expect(json.result.bullets).toEqual(VALID_INSIGHT_BULLETS)
     expect(deps.claims).toBe(1)
     expect(deps.xaiCalls).toBe(1)
     expect(deps.settles).toBe(1)
@@ -422,7 +427,7 @@ describe('feature matrix sanity', () => {
 describe('validateFeatureResult (structured output schema)', () => {
   it('accepts a well-formed month_insight result', () => {
     const r = validateFeatureResult('month_insight', {
-      bullets: ['a', 'b', 'c'],
+      bullets: VALID_INSIGHT_BULLETS,
       groundedMonth: '2026-07',
     })
     expect(r.ok).toBe(true)
@@ -436,12 +441,53 @@ describe('validateFeatureResult (structured output schema)', () => {
     expect(r.ok).toBe(false)
   })
 
+  it('accepts two useful bullets without forcing filler', () => {
+    const r = validateFeatureResult('month_insight', {
+      bullets: VALID_INSIGHT_BULLETS.slice(0, 2),
+      groundedMonth: '2026-07',
+    })
+    expect(r.ok).toBe(true)
+  })
+
   it('rejects too few bullets', () => {
     const r = validateFeatureResult('month_insight', {
-      bullets: ['first', 'second'],
+      bullets: VALID_INSIGHT_BULLETS.slice(0, 1),
       groundedMonth: '2026-07',
     })
     expect(r.ok).toBe(false)
+  })
+
+  it('rejects advice that reduces a budget limit by the overspend amount', () => {
+    const r = validateFeatureResult('month_insight', {
+      bullets: [
+        '쇼핑 한도를 초과분 규모로 축소하고 식비·모임은 현재 수준 그대로 유지하세요.',
+        '쇼핑 지출은 다음 달 기존 목표 이내로 맞추고 월 중간에 실적을 다시 확인하세요.',
+      ],
+      groundedMonth: '2026-07',
+    })
+    expect(r.ok).toBe(false)
+  })
+
+  it('rejects bullets that repeat target, actual, and overspend amounts', () => {
+    const r = validateFeatureResult('month_insight', {
+      bullets: [
+        '쇼핑 지출이 ₩503,855로 목표 ₩200,000을 ₩303,855 초과했으니 다음 달에는 ₩200,000 이내로 맞추세요.',
+        '쇼핑은 예산상 계획 비중보다 실제 지출 비중이 높으므로 이번 달 소비 내역을 확인하세요.',
+      ],
+      groundedMonth: '2026-07',
+    })
+    expect(r.ok).toBe(false)
+  })
+
+  it('accepts reducing actual spending while keeping the existing limit', () => {
+    const r = validateFeatureResult('month_insight', {
+      bullets: [
+        '쇼핑 한도 ₩200,000은 유지하고 다음 달 실제 지출을 이번 달보다 ₩303,855 줄이세요.',
+        '쇼핑 지출은 다음 달 기존 목표 이내로 맞추고 월 중간에 실적을 다시 확인하세요.',
+      ],
+      groundedMonth: '2026-07',
+    })
+    expect(r.ok).toBe(true)
   })
 
   it('accepts nl_txn_parse with null draft fields', () => {

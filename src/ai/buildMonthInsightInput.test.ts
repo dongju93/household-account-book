@@ -71,6 +71,8 @@ describe('buildMonthInsightInput (S06 / PR-6)', () => {
       target: 100_000,
       actual: 50_000,
       status: '정상',
+      plannedExpenseSharePct: 100,
+      actualExpenseSharePct: 4,
     })
     expect(input.pace?.[0]).toEqual({
       name: '카테고리1',
@@ -92,6 +94,29 @@ describe('buildMonthInsightInput (S06 / PR-6)', () => {
       breakdown: [],
     })
     expect('pace' in input).toBe(false)
+  })
+
+  it('compares planned expense share with actual spending share', () => {
+    const shopping = { ...achievement(1), name: '쇼핑', target: 200_000, actual: 503_855 }
+    const food = { ...achievement(2), name: '식비', target: 1_800_000, actual: 1_000_000 }
+
+    const input = buildMonthInsightInput({
+      ym: YM,
+      summary: { ...SUMMARY, totalExpense: 2_519_275 },
+      achievements: [shopping, food],
+      breakdown: [],
+    })
+
+    expect(input.achievements[0]).toMatchObject({
+      name: '쇼핑',
+      plannedExpenseSharePct: 10,
+      actualExpenseSharePct: 20,
+    })
+    expect(input.achievements[1]).toMatchObject({
+      name: '식비',
+      plannedExpenseSharePct: 90,
+      actualExpenseSharePct: 40,
+    })
   })
 
   it('caps achievements, pace, and topExpenses at AI_LIMITS.monthInsight', () => {

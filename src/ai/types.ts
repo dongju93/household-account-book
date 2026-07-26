@@ -158,6 +158,8 @@ export interface MonthInsightInput {
     target: number
     actual: number
     status: ExpenseStatus | SavingStatus
+    plannedExpenseSharePct: number | null
+    actualExpenseSharePct: number | null
   }[]
   pace?: {
     name: string
@@ -180,7 +182,7 @@ export interface MonthInsightResult {
  * otherwise, so a prompt-only deploy would keep serving stale bullets for TTL).
  * Included in the client hash payload only — never sent as gateway `input`.
  */
-export const MONTH_INSIGHT_PROMPT_REV = 7
+export const MONTH_INSIGHT_PROMPT_REV = 10
 
 export interface MonthCloseNarrativeInput {
   month: string
