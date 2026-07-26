@@ -8,7 +8,6 @@ import { useLedger } from '../../auth/useLedger'
 import { listCategories } from '../../data/categories'
 import { fetchTransactionsInRange, materializeMonths } from '../../data/summary'
 import { computeAchievements } from '../../domain/achievement'
-import { buildSavingTipTemplates } from '../../domain/ai/savingTipTemplates'
 import {
   budgetPaceRowsWithStatus,
   computeBudgetPaceRows,
@@ -78,16 +77,6 @@ export function DashboardPage() {
     paceRows: showPace ? budgetPaceRowsWithStatus(paceRows, ym) : undefined,
     breakdown,
   })
-  const tips = buildSavingTipTemplates({
-    period: showPace ? 'current' : 'closed',
-    summary,
-    achievements,
-    topExpenses: breakdown.slice(0, 5).map((r) => ({
-      name: r.name,
-      amount: r.amount,
-      pct: r.pct,
-    })),
-  })
 
   const byMonth = groupTransactionsByMonth(months, rangeTxns)
   const trend = monthlyTrend(byMonth)
@@ -115,7 +104,7 @@ export function DashboardPage() {
         {!loading && !error && (
           <>
             <SummaryCards summary={summary} />
-            {ledgerId && <AiInsightCard ledgerId={ledgerId} input={insightInput} tips={tips} />}
+            {ledgerId && <AiInsightCard ledgerId={ledgerId} input={insightInput} />}
             {ledgerId && <MonthCloseSection ledgerId={ledgerId} ym={ym} />}
             <AchievementList
               rows={achievements}

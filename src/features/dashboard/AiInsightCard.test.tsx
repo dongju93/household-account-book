@@ -38,11 +38,6 @@ const INPUT: MonthInsightInput = {
   topExpenses: [{ name: '식비', amount: 400_000, pct: 33 }],
 }
 
-const TIPS = [
-  '남은 기간 가장 먼저 절약할 항목은 여가입니다. 예산이 ₩20,000 남았으므로 추가 지출을 이 범위 안에서 관리하세요.',
-  '예산 초과 2곳 · 최대는 식비(₩50,000). 초과 큰 항목부터 한도를 다시 잡으세요.',
-]
-
 function aiSettings(enabled: boolean): AiUserSettings {
   return { userId: USER_ID, inAppAiEnabled: enabled, shareMemoWithAi: true, updatedAt: null }
 }
@@ -62,7 +57,7 @@ function okResponse(
   }
 }
 
-function renderCard(tips: readonly string[] = TIPS) {
+function renderCard() {
   const auth: AuthValue = {
     status: 'authed',
     user: { id: USER_ID } as AuthValue['user'],
@@ -73,7 +68,7 @@ function renderCard(tips: readonly string[] = TIPS) {
   }
   return render(
     <AuthContext.Provider value={auth}>
-      <AiInsightCard ledgerId={LEDGER_ID} input={INPUT} tips={tips} />
+      <AiInsightCard ledgerId={LEDGER_ID} input={INPUT} />
     </AuthContext.Provider>,
   )
 }
@@ -111,28 +106,26 @@ describe('AiInsightCard (S06 / PR-6)', () => {
     })
   })
 
-  it('keeps template tips but hides AI bullets quietly on flag_off', async () => {
+  it('hides the whole card quietly on flag_off', async () => {
     mockedInvoke.mockRejectedValue(new AiClientError('flag_off'))
     renderCard()
 
-    await screen.findByText(TIPS[0])
-    // Wait for the async invoke to settle into `hidden` (tips paint before that).
+    await waitFor(() => expect(mockedInvoke).toHaveBeenCalled())
     await waitFor(() => {
-      expect(screen.queryByText('다시 생성')).not.toBeInTheDocument()
+      expect(screen.queryByText('AI 인사이트')).not.toBeInTheDocument()
     })
-    expect(screen.queryByText(/인사이트 생성 중/)).not.toBeInTheDocument()
     expect(screen.queryByText(/일시적으로 사용할 수 없습니다/)).not.toBeInTheDocument()
   })
 
-  it('shows the error message but keeps tips on quota/upstream failures', async () => {
+  it('shows the error message on quota/upstream failures', async () => {
     mockedInvoke.mockRejectedValue(new AiClientError('quota_exceeded'))
     renderCard()
 
     await screen.findByText('이번 달 AI 이용 한도를 모두 사용했습니다.')
-    expect(screen.getByText(TIPS[0])).toBeInTheDocument()
+    expect(screen.getByText('다시 생성')).toBeInTheDocument()
   })
 
-  it('re-invokes on 다시 생성 and rotates the offline tip', async () => {
+  it('re-invokes on 다시 생성', async () => {
     const user = userEvent.setup()
     mockedInvoke.mockResolvedValue(
       okResponse({ bullets: ['불릿1', '불릿2', '불릿3'], groundedMonth: '2026-07' }, true),
@@ -140,14 +133,11 @@ describe('AiInsightCard (S06 / PR-6)', () => {
     renderCard()
 
     await screen.findByText('불릿1')
-    expect(screen.getByText(TIPS[0])).toBeInTheDocument()
-    expect(screen.queryByText(TIPS[1])).not.toBeInTheDocument()
     expect(mockedInvoke).toHaveBeenCalledTimes(1)
 
     await user.click(screen.getByText('다시 생성'))
     await waitFor(() => expect(mockedInvoke).toHaveBeenCalledTimes(2))
-    expect(screen.getByText(TIPS[1])).toBeInTheDocument()
-    expect(screen.queryByText(TIPS[0])).not.toBeInTheDocument()
+    expect(screen.getByText('불릿1')).toBeInTheDocument()
   })
 
   it('polishes leaked English field names and bare amounts in bullets', async () => {
@@ -191,6 +181,5 @@ describe('AiInsightCard (S06 / PR-6)', () => {
     renderCard()
 
     await screen.findByText('응답 형식이 올바르지 않습니다.')
-    expect(screen.getByText(TIPS[0])).toBeInTheDocument()
   })
 })
