@@ -2,9 +2,10 @@ import type { ReactNode } from 'react'
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 
 import { monthTrendLabel, type MonthlyTrendPoint } from '../domain/reports'
+import { won } from '../lib/format'
 import {
-  ChartCardHeader,
   ChartDefs,
+  ChartFrame,
   ChartGrid,
   ChartZeroLine,
   FUND_CHART_COLORS,
@@ -12,7 +13,26 @@ import {
   chartXAxisProps,
   chartYAxisProps,
 } from './charts'
-import { Card } from './primitives'
+import { chartInkHex } from './tone'
+
+/**
+ * §8 accessible description, assembled only from points already plotted — first
+ * month, last month and the extremes. No new query, no new aggregate.
+ */
+function describeTrend(trend: readonly MonthlyTrendPoint[]): string | undefined {
+  if (trend.length === 0) return undefined
+  const first = trend[0]
+  const last = trend[trend.length - 1]
+  const high = trend.reduce((a, b) => (b.balance > a.balance ? b : a))
+  const low = trend.reduce((a, b) => (b.balance < a.balance ? b : a))
+  return (
+    `${trend.length}개월 수지. ` +
+    `${monthTrendLabel(first.month)} ${won(first.balance)}에서 ` +
+    `${monthTrendLabel(last.month)} ${won(last.balance)}. ` +
+    `최고 ${monthTrendLabel(high.month)} ${won(high.balance)}, ` +
+    `최저 ${monthTrendLabel(low.month)} ${won(low.balance)}.`
+  )
+}
 
 export function BalanceTrendChart({
   trend,
@@ -34,10 +54,13 @@ export function BalanceTrendChart({
     (trendData.at(-1)?.balance ?? 0) >= 0 ? 'url(#balanceGradientPos)' : 'url(#balanceGradientNeg)'
 
   return (
-    <Card>
-      <ChartCardHeader title={title} legend={legend} />
+    <ChartFrame title={title} legend={legend} description={describeTrend(trend)}>
       <ResponsiveContainer width="100%" height={height}>
-        <AreaChart data={trendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <AreaChart
+          accessibilityLayer={false}
+          data={trendData}
+          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+        >
           <ChartDefs />
           <ChartGrid />
           <XAxis dataKey="label" {...chartXAxisProps} />
@@ -55,12 +78,21 @@ export function BalanceTrendChart({
               const { cx, cy, payload } = props
               if (cx == null || cy == null) return null
               const color = (payload as { stroke?: string }).stroke ?? FUND_CHART_COLORS.balance
-              return <circle cx={cx} cy={cy} r={3} fill={color} stroke="#fff" strokeWidth={1.5} />
+              return (
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={3}
+                  fill={color}
+                  stroke={chartInkHex.surface}
+                  strokeWidth={1.5}
+                />
+              )
             }}
             activeDot={{ r: 5, strokeWidth: 0 }}
           />
         </AreaChart>
       </ResponsiveContainer>
-    </Card>
+    </ChartFrame>
   )
 }

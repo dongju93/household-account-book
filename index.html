@@ -7,7 +7,20 @@
       content="A7lfkQbgTe3W72G7/p+rL5IicAzrbz1OIbWuPEOslv97BfU9eCy+nZI6IqYp9d0TLOrCl68RJAalx7NE7VP4tgAAAACJeyJvcmlnaW4iOiJodHRwczovL21haW4uZDJ3NXg2bm5nYXc5dHMuYW1wbGlmeWFwcC5jb206NDQzIiwiZmVhdHVyZSI6IldlYk1DUCIsImV4cGlyeSI6MTc5NDg3MzYwMCwiaXNTdWJkb21haW4iOnRydWUsImlzVGhpcmRQYXJ0eSI6dHJ1ZX0="
     />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      No `maximum-scale` / `user-scalable=no`: the redesign requires the app to
+      stay usable at 200% zoom (docs/5. frontend-redesign-plan.md §8).
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!--
+      Dark mode is explicitly out of scope (§12), so declare the single light
+      scheme. Without this the UA paints form controls, scrollbars and the
+      <dialog> backdrop with dark defaults on a dark-preference device, against a
+      page that is committed to warm paper.
+    -->
+    <meta name="color-scheme" content="light" />
+    <!-- Matches --color-canvas so the browser chrome continues the app surface. -->
+    <meta name="theme-color" content="#f1eee7" />
     <!-- Preconnect absorbs DNS+TLS before the stylesheet request, avoiding the @import discovery waterfall. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

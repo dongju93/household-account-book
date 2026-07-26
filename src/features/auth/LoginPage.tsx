@@ -48,15 +48,27 @@ export function LoginPage() {
   if (status === 'authed') return <Navigate to="/dashboard" replace />
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-fill1 px-6">
-      <div className="w-full max-w-[360px]">
-        <div className="mb-7 text-center">
-          <h1 className="text-2xl font-extrabold tracking-tight text-ink">가계부</h1>
-          <p className="mt-1 text-sm text-ink2">수입 · 지출 · 저축 · 투자를 한 곳에서</p>
+    /*
+      §6.1: same single column, same form, same login/signup switch. What changed
+      is that the screen now says what the product is before asking for an
+      account — in one plain sentence that promises no bank or card linking,
+      because there is none — and that the form itself reads more sharply.
+    */
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-canvas px-6 py-10">
+      <main className="w-full max-w-[360px]">
+        <div className="mb-8">
+          <h1 className="text-title text-ink">가계부</h1>
+          <p className="text-body mt-2 text-ink2 text-pretty">
+            직접 기록해서 수입 · 지출 · 저축 · 투자를 한 곳에서 정리합니다.
+          </p>
+          <p className="text-caption mt-3 text-ink2">
+            기록은 로그인한 계정으로만 열립니다. 은행·카드 연결은 없습니다.
+          </p>
         </div>
 
         <Segmented
-          className="mb-4"
+          className="mb-5"
+          label="로그인 또는 회원가입"
           items={[
             { value: 'login', label: '로그인' },
             { value: 'signup', label: '회원가입' },
@@ -65,9 +77,9 @@ export function LoginPage() {
           onChange={setMode}
         />
 
-        <form action={formAction} className="flex flex-col gap-3">
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-semibold text-ink2">이메일</span>
+        <form action={formAction} className="flex flex-col gap-4">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-caption font-semibold text-ink2">이메일</span>
             <TextInput
               name="email"
               type="email"
@@ -76,8 +88,8 @@ export function LoginPage() {
               placeholder="you@example.com"
             />
           </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-semibold text-ink2">비밀번호</span>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-caption font-semibold text-ink2">비밀번호</span>
             <PasswordInput
               name="password"
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
@@ -87,18 +99,23 @@ export function LoginPage() {
             />
           </label>
 
+          {/* Both outcomes render in the same slot, directly above the submit
+              button, so resolving the action never pushes the button (§6.1). */}
           {state.error && <ErrorBanner message={state.error} />}
           {state.message && (
-            <div className="rounded-[12px] border border-ok/40 bg-ok/10 px-3 py-2.5 text-xs font-medium text-ok">
+            <div
+              role="status"
+              className="text-caption rounded-surface border border-status-success/35 bg-status-success/8 px-3 py-2.5 text-status-success"
+            >
               {state.message}
             </div>
           )}
 
-          <Button type="submit" disabled={pending} className="mt-1">
+          <Button type="submit" disabled={pending}>
             {pending ? '처리 중…' : mode === 'login' ? '로그인' : '회원가입'}
           </Button>
         </form>
-      </div>
+      </main>
     </div>
   )
 }

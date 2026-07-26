@@ -31,6 +31,7 @@ export function RecurringManager({ ledgerId, canEdit }: { ledgerId: string; canE
     <>
       <SettingsSection
         title="고정 항목"
+        description="매월 자동으로 기록되는 항목입니다. 월을 열면 그 달의 거래로 만들어집니다."
         canAdd={canEdit}
         onAdd={() => {
           setEditing(null)
@@ -52,10 +53,12 @@ export function RecurringManager({ ledgerId, canEdit }: { ledgerId: string; canE
           <div
             key={item.id}
             className={
-              'flex items-center gap-2.5 border-b border-line-soft px-3 py-2.5 last:border-b-0 ' +
-              (item.isActive ? '' : 'opacity-55')
+              'flex items-center gap-2 border-b border-line-soft px-2 py-2 last:border-b-0 ' +
+              (item.isActive ? '' : 'opacity-60')
             }
           >
+            {/* §6.7: the edit target stops short of the toggle so the two
+                actions no longer share an edge. */}
             <button
               type="button"
               onClick={() => {
@@ -64,23 +67,27 @@ export function RecurringManager({ ledgerId, canEdit }: { ledgerId: string; canE
                   setSheetOpen(true)
                 }
               }}
-              className="flex flex-1 flex-col items-start gap-1 text-left"
+              disabled={!canEdit}
+              className="pressable flex min-h-12 min-w-0 flex-1 items-center gap-2 rounded-control px-1 text-left enabled:hover:bg-fill1"
             >
-              <span className="flex items-center gap-2">
-                <span className="text-sm font-semibold">{item.name}</span>
-                <Pill tone="ink">{fundTypeLabel(item.type)}</Pill>
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="flex items-center gap-1.5">
+                  <span className="text-body truncate font-semibold text-ink">{item.name}</span>
+                  <Pill tone="ink">{fundTypeLabel(item.type)}</Pill>
+                </span>
+                <span className="tnum text-caption text-ink2">
+                  매월 {item.dayOfMonth}일 · {item.startMonth.slice(0, 7)}
+                  {item.endMonth ? ` ~ ${item.endMonth.slice(0, 7)}` : ' ~'}
+                </span>
               </span>
-              <span className="text-[11px] text-ink3">
-                매월 {item.dayOfMonth}일 · {item.startMonth.slice(0, 7)}
-                {item.endMonth ? ` ~ ${item.endMonth.slice(0, 7)}` : ' ~'}
-              </span>
+              <Won value={item.amount} className="text-body flex-none text-ink" />
             </button>
 
-            <Won value={item.amount} className="text-[12.5px] text-ink2" />
             {canEdit && (
               <Toggle
                 on={item.isActive}
                 onChange={(on) => run(() => setRecurringActive(item.id, ledgerId, on), reload)}
+                label={`${item.name} 활성화`}
               />
             )}
           </div>

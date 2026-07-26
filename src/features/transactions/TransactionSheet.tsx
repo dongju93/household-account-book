@@ -8,7 +8,18 @@ import type { FundType } from '../../domain/fundType'
 import type { Category, Transaction } from '../../domain/types'
 import { validateTransactionInput } from '../../domain/validation'
 import { todayISO } from '../../lib/month'
-import { BottomSheet, Button, Chip, ErrorBanner, Segmented, TextInput, Toggle } from '../../ui'
+import {
+  AmountInput,
+  BottomSheet,
+  Button,
+  Chip,
+  ErrorBanner,
+  FieldError,
+  Segmented,
+  TextAction,
+  TextInput,
+  Toggle,
+} from '../../ui'
 import { NlDraftField } from './NlDraftField'
 
 /**
@@ -104,7 +115,9 @@ export function TransactionSheet({
 
   return (
     <BottomSheet open={open} onClose={onClose} title={editing ? '거래 수정' : '거래 추가'}>
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-4">
+        {/* §6.5: the natural-language field keeps its current position and its
+            apply-only behaviour — it never writes. */}
         {!editing && open && (
           <NlDraftField
             key={nlGeneration}
@@ -115,59 +128,56 @@ export function TransactionSheet({
         )}
 
         {editing && transaction.source === 'recurring' && (
-          <p className="rounded-[10px] bg-fill1 px-3 py-2 text-[11px] text-ink2">
+          <p className="text-caption rounded-control bg-fill1 px-3 py-2 text-ink2">
             고정 항목에서 생성된 거래입니다. 이 달의 내역만 수정됩니다.
           </p>
         )}
 
-        <Segmented items={FUND_TYPE_ITEMS} value={type} onChange={changeType} />
+        <Segmented label="자금 구분" items={FUND_TYPE_ITEMS} value={type} onChange={changeType} />
 
-        <label className="rounded-[13px] border border-line px-3.5 py-3 text-right">
-          <span className="float-left mt-2 text-xs text-ink3">금액</span>
-          <input
+        {/* §6.5: the amount is the sheet's strongest visual element — hero type on
+            a hero-radius surface, and the sheet's focus entry point in create mode. */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-caption font-semibold text-ink2">금액</span>
+          <AmountInput
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            inputMode="numeric"
-            placeholder="0"
+            onChange={setAmount}
+            size="hero"
             autoFocus={!editing}
+            aria-label="금액"
             aria-invalid={errors.amount ? true : undefined}
             aria-describedby={errors.amount ? amountErrorId : undefined}
-            className="tnum w-full bg-transparent text-right text-2xl font-extrabold text-ink outline-none placeholder:text-ink3"
           />
-        </label>
-        {errors.amount && (
-          <span id={amountErrorId} className="-mt-1 text-[11px] text-danger">
-            {errors.amount}
-          </span>
-        )}
+          {errors.amount && <FieldError id={amountErrorId}>{errors.amount}</FieldError>}
+        </div>
 
-        {typeCategories.length === 0 ? (
-          <p className="text-[12px] text-ink3">
-            이 구분의 활성 카테고리가 없습니다. 설정에서 추가하세요.
-          </p>
-        ) : (
-          <div
-            className="flex flex-wrap gap-1.5"
-            role="group"
-            aria-invalid={errors.categoryId ? true : undefined}
-            aria-describedby={errors.categoryId ? categoryErrorId : undefined}
-          >
-            {typeCategories.map((c) => (
-              <Chip key={c.id} active={c.id === categoryId} onClick={() => setCategoryId(c.id)}>
-                {c.name}
-              </Chip>
-            ))}
-          </div>
-        )}
-        {errors.categoryId && (
-          <span id={categoryErrorId} className="-mt-1 text-[11px] text-danger">
-            {errors.categoryId}
-          </span>
-        )}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-caption font-semibold text-ink2">카테고리</span>
+          {typeCategories.length === 0 ? (
+            <p className="text-caption text-ink2">
+              이 구분의 활성 카테고리가 없습니다. 설정에서 추가하세요.
+            </p>
+          ) : (
+            <div
+              className="flex flex-wrap gap-2"
+              role="group"
+              aria-label="카테고리"
+              aria-invalid={errors.categoryId ? true : undefined}
+              aria-describedby={errors.categoryId ? categoryErrorId : undefined}
+            >
+              {typeCategories.map((c) => (
+                <Chip key={c.id} active={c.id === categoryId} onClick={() => setCategoryId(c.id)}>
+                  {c.name}
+                </Chip>
+              ))}
+            </div>
+          )}
+          {errors.categoryId && <FieldError id={categoryErrorId}>{errors.categoryId}</FieldError>}
+        </div>
 
-        <div className="flex gap-2">
-          <label className="flex flex-1 flex-col gap-1">
-            <span className="text-xs font-semibold text-ink2">날짜</span>
+        <div className="flex gap-3">
+          <label className="flex flex-1 flex-col gap-1.5">
+            <span className="text-caption font-semibold text-ink2">날짜</span>
             <TextInput
               type="date"
               value={date}
@@ -177,21 +187,24 @@ export function TransactionSheet({
               className="tnum"
             />
           </label>
-          <label className="flex flex-[1.2] flex-col gap-1">
-            <span className="text-xs font-semibold text-ink2">메모</span>
+          <label className="flex flex-[1.2] flex-col gap-1.5">
+            <span className="text-caption font-semibold text-ink2">메모</span>
             <TextInput value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="메모" />
           </label>
         </div>
-        {errors.date && (
-          <span id={dateErrorId} className="-mt-1 text-[11px] text-danger">
-            {errors.date}
-          </span>
-        )}
+        {errors.date && <FieldError id={dateErrorId}>{errors.date}</FieldError>}
 
+        {/* §6.5: say what "저장 후 계속" actually preserves, so the next empty
+            form is not a surprise. Behaviour is unchanged. */}
         {!editing && (
-          <div className="flex items-center justify-between">
-            <span className="text-[12.5px] font-semibold text-ink2">저장 후 계속 입력</span>
-            <Toggle on={keepOpen} onChange={setKeepOpen} />
+          <div className="flex items-start justify-between gap-3 rounded-surface bg-fill1 px-3 py-2.5">
+            <span className="min-w-0">
+              <span className="text-body block font-semibold text-ink">저장 후 계속 입력</span>
+              <span className="text-caption block text-ink2 text-pretty">
+                날짜와 구분은 그대로 두고 금액·카테고리·메모만 비웁니다.
+              </span>
+            </span>
+            <Toggle on={keepOpen} onChange={setKeepOpen} label="저장 후 계속 입력" />
           </div>
         )}
 
@@ -201,26 +214,26 @@ export function TransactionSheet({
           {saving ? '저장 중…' : '저장'}
         </Button>
 
+        {/* §6.5: two-step inline delete, unchanged. Only the confirming step's
+            destructive button carries the danger colour — the trigger stays a
+            tertiary text action so it cannot be hit by reflex. */}
         {editing && onDelete && !confirmingDelete && (
-          <button
-            type="button"
+          <TextAction
             onClick={() => setConfirmingDelete(true)}
-            className="py-1 text-center text-[13px] font-semibold text-danger"
+            className="mx-0 self-center text-status-danger enabled:hover:text-status-danger"
           >
             삭제
-          </button>
+          </TextAction>
         )}
         {editing && onDelete && confirmingDelete && (
-          <div className="flex flex-col gap-2 rounded-[12px] border border-danger/40 bg-danger/5 p-3">
-            <span className="text-center text-[13px] font-semibold text-ink">
-              이 거래를 삭제할까요?
-            </span>
+          <div className="flex flex-col gap-2.5 rounded-surface border border-status-danger/35 bg-status-danger/8 p-3">
+            <p className="text-body text-center font-semibold text-ink">이 거래를 삭제할까요?</p>
             <div className="flex gap-2">
               <Button variant="ghost" onClick={() => setConfirmingDelete(false)}>
                 취소
               </Button>
-              <button
-                type="button"
+              <Button
+                variant="danger"
                 disabled={deleting}
                 onClick={async () => {
                   setDeleting(true)
@@ -230,10 +243,9 @@ export function TransactionSheet({
                     setDeleting(false)
                   }
                 }}
-                className="w-full rounded-[13px] bg-danger py-3 text-[15px] font-bold text-white disabled:opacity-50"
               >
                 {deleting ? '삭제 중…' : '삭제'}
-              </button>
+              </Button>
             </div>
           </div>
         )}

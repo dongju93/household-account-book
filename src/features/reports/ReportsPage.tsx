@@ -15,7 +15,7 @@ import {
   type ReportPeriodMonths,
 } from '../../domain/reports'
 import { currentYearMonth, lastMonths, monthWindowRange } from '../../lib/month'
-import { AppBar, Chip, ErrorBanner, LoadingState, ScreenBody } from '../../ui'
+import { AppBar, Chip, ErrorBanner, ReportsSkeleton, ScreenBody } from '../../ui'
 import { useStatsQnaTools } from '../../webmcp/useStatsQnaTools'
 import { ReportsCharts } from './ReportsCharts'
 
@@ -63,8 +63,10 @@ export function ReportsPage() {
   return (
     <>
       <AppBar title="통계" center />
-      <ScreenBody className="flex flex-col gap-3.5">
-        <div className="flex gap-1.5">
+      <ScreenBody className="flex flex-col gap-3">
+        {/* §6.6 keeps the 3·6·12 selector as-is; the group only gains an
+            accessible name so the chips are announced as one control. */}
+        <div role="group" aria-label="집계 기간" className="flex gap-2">
           {REPORT_PERIODS.map((p) => (
             <Chip key={p} active={period === p} onClick={() => setPeriod(p)}>
               {p}개월
@@ -72,7 +74,7 @@ export function ReportsPage() {
           ))}
         </div>
 
-        {loading && <LoadingState />}
+        {loading && <ReportsSkeleton />}
         {error && (
           <ErrorBanner
             message={error.message}

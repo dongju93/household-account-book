@@ -10,6 +10,7 @@ import { useAuth } from '../../auth/useAuth'
 import { getAiUserSettings } from '../../data/aiSettings'
 import { describeError } from '../../data/errors'
 import { polishInsightBullets } from '../../domain/ai/polishInsightText'
+import { Skeleton, SkeletonScreen, TextAction } from '../../ui'
 
 /**
  * AI 월간 인사이트 카드 (S06 / PR-6, spec §5.3).
@@ -95,31 +96,38 @@ export function AiInsightCard({ ledgerId, input }: { ledgerId: string; input: Mo
   if (state.kind === 'hidden') return null
 
   return (
-    <section className="rounded-[16px] border border-line bg-paper px-4 py-3.5">
-      <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-[13.5px] font-bold">AI 인사이트</span>
-        <button
-          type="button"
-          onClick={reload}
-          disabled={loading}
-          className="text-[11.5px] font-semibold text-ink3 disabled:opacity-50"
-        >
+    // §3.1: AI output sits on a different surface from the calculated numbers —
+    // borderless `fill1` rather than a bordered `paper` card — so the trust
+    // boundary between "what the ledger says" and "what a model wrote" is
+    // visible before the text is read. The `aside` names it as advice.
+    <section className="rounded-surface bg-fill1 px-4 py-3.5">
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <div className="flex items-baseline gap-2">
+          <h2 className="text-section text-ink">AI 인사이트</h2>
+          <span className="text-caption text-ink2">AI가 작성한 조언</span>
+        </div>
+        <TextAction onClick={reload} disabled={loading}>
           다시 생성
-        </button>
+        </TextAction>
       </div>
 
       {loading ? (
-        <p className="text-[12px] text-ink3">인사이트 생성 중…</p>
+        <SkeletonScreen label="인사이트 생성 중…" className="gap-2 py-0.5">
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-[85%]" />
+          <Skeleton className="h-3 w-[70%]" />
+        </SkeletonScreen>
       ) : state.kind === 'ok' ? (
-        <ul className="list-disc space-y-1 pl-4">
+        <ul className="flex flex-col gap-1.5">
           {state.bullets.map((b) => (
-            <li key={b} className="text-[12.5px] leading-relaxed text-ink2">
+            <li key={b} className="text-body flex gap-2 text-ink2 text-pretty">
+              <span aria-hidden className="mt-2 h-1 w-1 flex-none rounded-full bg-ink3" />
               {b}
             </li>
           ))}
         </ul>
       ) : state.kind === 'error' ? (
-        <p className="text-[11.5px] text-danger">{state.message}</p>
+        <p className="text-caption text-status-danger">{state.message}</p>
       ) : null}
     </section>
   )

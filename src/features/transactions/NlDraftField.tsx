@@ -81,7 +81,11 @@ export function NlDraftField({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
+    // §6.5: this block keeps its position above the form and its apply-only
+    // behaviour. It sits on the `fill1` AI surface used everywhere else so the
+    // trust boundary is visible before the draft lands in the fields.
+    <div className="flex flex-col gap-2 rounded-surface bg-fill1 p-3">
+      <span className="text-caption font-semibold text-ink2">자연어로 입력</span>
       <div className="flex gap-2">
         <TextInput
           value={text}
@@ -101,22 +105,25 @@ export function NlDraftField({
           type="button"
           onClick={() => void handleApply()}
           disabled={applying || !text.trim()}
-          className="flex-none rounded-[12px] bg-ink px-4 text-sm font-bold text-white disabled:opacity-50"
+          className="pressable text-body min-h-11 flex-none rounded-control bg-ink px-4 font-bold text-paper enabled:hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {applying ? '해석 중…' : '적용'}
         </button>
       </div>
+      {/* §6.5: same wording, moved from the warning colour to `Status info` —
+          a successfully applied draft is information, not a caution. The real
+          caution is the per-field `warnings` below, which keep the warning tone. */}
       {applied && (
-        <p className="rounded-[10px] bg-warn/15 px-3 py-2 text-[11.5px] font-semibold text-warn">
+        <p className="text-caption rounded-control bg-status-info/12 px-3 py-2 font-semibold text-status-info">
           AI가 제안한 초안입니다. 내용을 확인한 뒤 저장해 주세요.
         </p>
       )}
       {warnings.map((w) => (
-        <p key={w} className="text-[11px] text-warn">
+        <p key={w} className="text-caption text-status-warning">
           {w}
         </p>
       ))}
-      {error && <p className="text-[11px] text-danger">{error}</p>}
+      {error && <p className="text-caption text-status-danger">{error}</p>}
     </div>
   )
 }

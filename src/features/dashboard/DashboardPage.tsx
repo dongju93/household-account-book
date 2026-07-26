@@ -20,7 +20,7 @@ import {
   monthlyTrend,
 } from '../../domain/reports'
 import { addMonths, currentYearMonth, monthRange, todayISO } from '../../lib/month'
-import { AppBar, ErrorBanner, LoadingState, MonthNav, ScreenBody } from '../../ui'
+import { AppBar, DashboardSkeleton, ErrorBanner, MonthNav, ScreenBody } from '../../ui'
 import { useBudgetPaceTools } from '../../webmcp/useBudgetPaceTools'
 import { AchievementList } from './AchievementList'
 import { AiInsightCard } from './AiInsightCard'
@@ -93,24 +93,33 @@ export function DashboardPage() {
           />
         }
       />
-      <ScreenBody className="flex flex-col gap-3.5">
-        {loading && <LoadingState />}
+      <ScreenBody className="flex flex-col gap-6">
+        {loading && <DashboardSkeleton />}
         {error && (
           <ErrorBanner
             message={error.message}
             variant={error.permission ? 'permission' : 'error'}
           />
         )}
+        {/*
+          §6.3 running order: 상태 파악 → 조정할 항목 → 조언 → 상세 분석.
+          Previously the AI card and the close review sat between the summary and
+          the achievements, so the reader crossed two advisory blocks before
+          reaching the thing they could act on. Numbers now run first, the two
+          AI-authored surfaces sit together after them, and the charts close.
+          Month gating is unchanged: pace hints only in the current month,
+          월 마감 점검 only in past months (it self-gates on `ym`).
+        */}
         {!loading && !error && (
           <>
             <SummaryCards summary={summary} />
-            {ledgerId && <AiInsightCard ledgerId={ledgerId} input={insightInput} />}
-            {ledgerId && <MonthCloseSection ledgerId={ledgerId} ym={ym} />}
             <AchievementList
               rows={achievements}
               paceByCategoryId={paceLookup}
-              showPace={showPace}
+              isCurrentMonth={showPace}
             />
+            {ledgerId && <MonthCloseSection ledgerId={ledgerId} ym={ym} />}
+            {ledgerId && <AiInsightCard ledgerId={ledgerId} input={insightInput} />}
             <DashboardCharts breakdown={breakdown} summary={summary} trend={trend} />
           </>
         )}

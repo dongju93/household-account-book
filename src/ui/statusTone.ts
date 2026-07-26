@@ -1,17 +1,23 @@
+import type { FundType } from '../domain/fundType'
 import type { AchievementStatus } from '../domain/types'
-import type { Tone } from './tone'
+import type { FundTone, StatusTone } from './tone'
 
-// Maps each status label to a tone — the production version of the wireframe's
-// statusMeta. 초과→danger, 주의·근접→warn, 정상·달성→ok, 진행중→info.
-const STATUS_TONE: Record<AchievementStatus, Tone> = {
+// 초과→danger, 주의·근접→warning, 정상·달성→success, 진행중→info.
+const STATUS_TONE: Record<AchievementStatus, StatusTone> = {
   초과: 'danger',
-  주의: 'warn',
-  근접: 'warn',
-  정상: 'ok',
-  달성: 'ok',
+  주의: 'warning',
+  근접: 'warning',
+  정상: 'success',
+  달성: 'success',
   진행중: 'info',
 }
 
-export function statusTone(status: AchievementStatus): Tone {
+/** The only sanctioned way to colour a UI state (§4.1). Returns a StatusTone. */
+export function statusTone(status: AchievementStatus): StatusTone {
   return STATUS_TONE[status]
+}
+
+/** The only sanctioned way to colour 자금 구분 data (§4.1). Returns a FundTone. */
+export function fundTone(type: FundType): FundTone {
+  return type
 }

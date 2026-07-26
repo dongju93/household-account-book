@@ -4,9 +4,22 @@ import { useEffect, useId, useRef } from 'react'
 /**
  * Modal sheet anchored to the bottom (the 거래 추가 pattern), built on the native
  * `<dialog>` element for browser-provided focus trapping, background `inert`,
- * and Escape handling. `closedby="any"` adds backdrop light-dismiss on
- * Chrome/Edge 134+ and Firefox 141+; the `onClick` target check below is the
- * fallback for Safari, which doesn't support `closedby` yet.
+ * Escape handling, and focus restoration to the trigger on close. `closedby="any"`
+ * adds backdrop light-dismiss on Chrome/Edge 134+ and Firefox 141+; the `onClick`
+ * target check below is the fallback for Safari, which doesn't support it yet.
+ *
+ * Redesign notes (docs/5. frontend-redesign-plan.md):
+ * - §4.3 — 18px `hero` radius; the sheet is a top-level surface, not a card.
+ * - §5    — the pad under the actions clears the home indicator via
+ *           `pb-safe-sheet`, and the body caps at 85dvh so a long category list
+ *           scrolls inside the sheet instead of pushing the save button off
+ *           screen when the virtual keyboard opens.
+ * - §8    — opening moves focus to the title unless the content declares its own
+ *           `autofocus` target (the transaction sheet focuses the amount field).
+ *
+ * The element deliberately carries no `flex` utility: `display` is owned by the
+ * `.bottom-sheet` rules in index.css so the closed sheet stays `display: none`
+ * and out of the tab order. See the comment there before adding one back.
  */
 export function BottomSheet({
   open,
@@ -20,12 +33,24 @@ export function BottomSheet({
   children: ReactNode
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null)
+  const titleRef = useRef<HTMLHeadingElement>(null)
   const titleId = useId()
 
   useEffect(() => {
     const dialog = dialogRef.current
     if (!dialog) return
-    if (open && !dialog.open) dialog.showModal()
+    if (open && !dialog.open) {
+      dialog.showModal()
+      // showModal() lands on the first tabbable node, which is the close button —
+      // announcing "닫기" as the sheet's opening line. Move focus to the content's
+      // declared entry point if it has one (`data-autofocus`, used by the amount
+      // field in create mode), otherwise to the title. React applies `autoFocus`
+      // imperatively without leaving an attribute behind, so it cannot be
+      // detected here — the marker has to be explicit.
+      const target = dialog.querySelector<HTMLElement>('[data-autofocus]')
+      if (target) target.focus()
+      else titleRef.current?.focus()
+    }
     if (!open && dialog.open) dialog.close()
   }, [open])
 
@@ -38,35 +63,43 @@ export function BottomSheet({
       onClick={(e) => {
         if (e.target === dialogRef.current) onClose()
       }}
-      className="bottom-sheet fixed inset-x-0 top-auto bottom-0 m-0 w-full max-w-[480px] mx-auto rounded-t-[20px] border-0 bg-paper px-4 pt-3 pb-5 shadow-[0_-10px_30px_rgba(0,0,0,0.15)]"
+      className="bottom-sheet fixed inset-x-0 top-auto bottom-0 z-(--z-sheet) mx-auto m-0 max-h-[85dvh] w-full max-w-[480px] flex-col rounded-t-hero border-0 bg-paper shadow-sheet"
     >
-      <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-fill3" />
-      {title && (
-        <div className="mb-3 flex items-center justify-between">
-          <h2 id={titleId} className="text-base font-extrabold">
-            {title}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="닫기"
-            className="text-ink3 hover:text-ink2"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
+      <div className="flex-none px-4 pt-3">
+        <div aria-hidden className="mx-auto mb-3 h-1 w-9 rounded-full bg-fill3" />
+        {title && (
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <h2
+              id={titleId}
+              ref={titleRef}
+              tabIndex={-1}
+              className="text-title text-ink outline-none"
             >
-              <path d="M3 3l10 10M13 3L3 13" />
-            </svg>
-          </button>
-        </div>
-      )}
-      {children}
+              {title}
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="닫기"
+              className="pressable hit-44 -mt-1 flex h-8 w-8 flex-none items-center justify-center rounded-full text-ink3 hover:bg-fill1 hover:text-ink"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="M3 3l10 10M13 3L3 13" />
+              </svg>
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="pb-safe-sheet min-h-0 flex-1 overflow-y-auto px-4">{children}</div>
     </dialog>
   )
 }

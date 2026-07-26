@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Outlet, useLocation } from 'react-router-dom'
 
 import { AddTransactionSheet } from '../features/transactions/AddTransactionSheet'
 import { AppShell, TabBar } from '../ui'
@@ -16,7 +16,17 @@ import { useRefresh } from './useRefresh'
 export function AppLayout() {
   const [addOpen, setAddOpen] = useState(false)
   const { refresh } = useRefresh()
+  const { pathname } = useLocation()
   useMonthCloseTools()
+
+  // React Router keeps the scroll offset across route changes, so switching tabs
+  // from a scrolled screen lands mid-list on the next one. AppShell is
+  // `min-h-dvh`, which lets the document (not ScreenBody) be the real scroller
+  // today — reset both so this holds if the shell ever becomes fixed-height.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+    document.querySelector('main')?.scrollTo(0, 0)
+  }, [pathname])
 
   return (
     <AppShell>

@@ -2,7 +2,7 @@ import { useAsyncData } from '../../app/useAsyncData'
 import { useRefresh } from '../../app/useRefresh'
 import { useLedger } from '../../auth/useLedger'
 import { listCategories } from '../../data/categories'
-import { BottomSheet } from '../../ui'
+import { BottomSheet, EmptyState } from '../../ui'
 import { TransactionSheet } from './TransactionSheet'
 
 interface AddTransactionSheetProps {
@@ -26,7 +26,10 @@ export function AddTransactionSheet({ open, onClose, onSaved }: AddTransactionSh
   if (!ledgerId || !canEdit) {
     return (
       <BottomSheet open={open} onClose={onClose} title="거래 추가">
-        <p className="py-6 text-center text-sm text-ink3">거래를 추가할 권한이 없습니다.</p>
+        <EmptyState
+          title="거래를 추가할 권한이 없습니다"
+          description="이 가계부에서는 읽기만 할 수 있습니다."
+        />
       </BottomSheet>
     )
   }
