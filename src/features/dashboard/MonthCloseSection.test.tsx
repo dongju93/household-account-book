@@ -24,7 +24,7 @@ vi.mock('../../ai/loadMonthCloseForNarrative', async (importOriginal) => {
 import { AiClientError, invokeAiFeature } from '../../ai/client'
 import { loadMonthCloseForNarrative } from '../../ai/loadMonthCloseForNarrative'
 import { getAiUserSettings } from '../../data/aiSettings'
-import { MonthCloseSection } from './MonthCloseSection'
+import { MonthCloseSection, summaryLines } from './MonthCloseSection'
 
 const mockedInvoke = vi.mocked(invokeAiFeature)
 const mockedLoad = vi.mocked(loadMonthCloseForNarrative)
@@ -162,7 +162,11 @@ describe('MonthCloseSection (S07 / PR-7)', () => {
 
     await expandSection(user)
 
-    await screen.findByText('점검 데이터를 불러오는 중…')
+    // The pending state is now a layout-shaped skeleton (redesign §7.1), so the
+    // loading message lives on the region's accessible name rather than in a
+    // visible paragraph. Querying by role+name keeps asserting what matters:
+    // the user is told it is loading, and no gateway call has gone out.
+    await screen.findByRole('status', { name: '점검 데이터를 불러오는 중…' })
     expect(mockedInvoke).not.toHaveBeenCalled()
   })
 
@@ -224,5 +228,28 @@ describe('MonthCloseSection (S07 / PR-7)', () => {
     await screen.findByText(/특이사항이 없습니다/)
     expect(screen.getByText(/거래 10건 점검/)).toBeInTheDocument()
     expect(mockedInvoke).not.toHaveBeenCalled()
+  })
+})
+
+describe('summaryLines', () => {
+  it('strips markdown bullet markers the model emits despite the prose prompt', () => {
+    expect(summaryLines('- 식비가 초과했습니다.\n- 주거에 메모가 없습니다.')).toEqual([
+      '식비가 초과했습니다.',
+      '주거에 메모가 없습니다.',
+    ])
+  })
+
+  it('accepts the other bullet glyphs and drops blank lines', () => {
+    expect(summaryLines('* 첫째 줄\n\n• 둘째 줄\n   ')).toEqual(['첫째 줄', '둘째 줄'])
+  })
+
+  it('leaves a genuine single paragraph as one line', () => {
+    expect(summaryLines('이번 달은 예산 안에서 마무리됐습니다.')).toEqual([
+      '이번 달은 예산 안에서 마무리됐습니다.',
+    ])
+  })
+
+  it('does not eat a hyphen that is part of the sentence', () => {
+    expect(summaryLines('2026-06월 지출입니다.')).toEqual(['2026-06월 지출입니다.'])
   })
 })

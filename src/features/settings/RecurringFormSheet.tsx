@@ -91,9 +91,12 @@ export function RecurringFormSheet({
       onClose={onClose}
       title={editing ? '고정 항목 수정' : '고정 항목 추가'}
     >
-      <div className="flex max-h-[70vh] flex-col gap-3 overflow-y-auto">
+      {/* BottomSheet now owns the max height and the scroll, so this no longer
+          nests a second scroll container inside one that already scrolls. */}
+      <div className="flex flex-col gap-4">
         <Field label="구분">
           <Segmented
+            label="자금 구분"
             items={FUND_TYPE_ITEMS}
             value={type}
             onChange={(next) => {
@@ -105,7 +108,7 @@ export function RecurringFormSheet({
 
         <Field label="카테고리" error={errors.categoryId}>
           {typeCategories.length === 0 ? (
-            <p className="text-[12px] text-ink3">
+            <p className="text-caption text-ink2">
               이 구분의 활성 카테고리가 없습니다. 먼저 카테고리를 추가하세요.
             </p>
           ) : (
@@ -132,19 +135,21 @@ export function RecurringFormSheet({
           <AmountInput value={amount} onChange={setAmount} />
         </Field>
 
-        <div className="flex gap-2">
-          <Field label="시작월" error={errors.startMonth} className="flex-1">
+        <div className="flex gap-3">
+          <Field label="시작월" error={errors.startMonth} className="min-w-0 flex-1">
             <TextInput
               type="month"
               value={startMonth}
               onChange={(e) => setStartMonth(e.target.value)}
+              className="tnum"
             />
           </Field>
-          <Field label="종료월 (선택)" error={errors.endMonth} className="flex-1">
+          <Field label="종료월 (선택)" error={errors.endMonth} className="min-w-0 flex-1">
             <TextInput
               type="month"
               value={endMonth}
               onChange={(e) => setEndMonth(e.target.value)}
+              className="tnum"
             />
           </Field>
         </div>
@@ -166,7 +171,7 @@ export function RecurringFormSheet({
 
         {submitError && <ErrorBanner message={submitError} />}
 
-        <Button onClick={handleSubmit} disabled={saving} className="mt-1">
+        <Button onClick={handleSubmit} disabled={saving}>
           {saving ? '저장 중…' : '저장'}
         </Button>
       </div>

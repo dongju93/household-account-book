@@ -12,7 +12,7 @@ vi.mock('../../data/aiSettings', () => ({
 }))
 
 import { getAiUserSettings, setInAppAiEnabled } from '../../data/aiSettings'
-import { AI_DISCLOSURE, GeneralSettings } from './GeneralSettings'
+import { AI_DISCLOSURE, InAppAiSettings } from './InAppAiSettings'
 
 const mockedGet = vi.mocked(getAiUserSettings)
 const mockedSet = vi.mocked(setInAppAiEnabled)
@@ -50,7 +50,7 @@ function renderSettings() {
   return render(
     <AuthContext.Provider value={auth}>
       <LedgerContext.Provider value={ledger}>
-        <GeneralSettings />
+        <InAppAiSettings />
       </LedgerContext.Provider>
     </AuthContext.Provider>,
   )
@@ -62,7 +62,7 @@ beforeEach(() => {
   mockedSet.mockImplementation(async (_id, enabled) => settings({ inAppAiEnabled: enabled }))
 })
 
-describe('GeneralSettings AI privacy gate (S04 / PR-8)', () => {
+describe('InAppAiSettings AI privacy gate (S04 / PR-8)', () => {
   it('shows overseas LLM disclosure copy (required even under public ON policy)', async () => {
     renderSettings()
     await waitFor(() => {

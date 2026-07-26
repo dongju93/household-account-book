@@ -26,7 +26,9 @@ const SettingsPage = lazy(() =>
 
 function Fallback() {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-screen">
+    // `canvas`, not `screen` — this paints before the 480px app shell exists, so
+    // it should match the page background, not the shell's (§4.1).
+    <div className="flex min-h-dvh items-center justify-center bg-canvas">
       <LoadingState />
     </div>
   )

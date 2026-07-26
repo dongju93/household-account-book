@@ -3,8 +3,15 @@ import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react
 
 import { cn } from '../lib/cn'
 
+/*
+  Form controls (§Phase 1).
+
+  `min-h-11` is the §8 touch target, `rounded-control` is the §4.3 control step,
+  and the focus ring comes from the global :focus-visible rule in index.css so
+  every input, select and composite field is outlined the same way.
+*/
 export const inputClassName =
-  'w-full rounded-[12px] border border-line bg-paper px-3 py-2.5 text-sm outline-none focus:border-ink'
+  'text-body min-h-11 w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink outline-none transition-colors duration-(--dur-state) placeholder:text-ink3 hover:border-ink3 focus:border-ink disabled:cursor-not-allowed disabled:opacity-50'
 
 type FieldControlProps = {
   'aria-invalid'?: boolean
@@ -14,11 +21,14 @@ type FieldControlProps = {
 export function Field({
   label,
   error,
+  hint,
   className,
   children,
 }: {
   label: string
   error?: string
+  /** Optional supporting line under the control (§6.5). */
+  hint?: string
   className?: string
   children: ReactNode
 }) {
@@ -29,15 +39,38 @@ export function Field({
       : children
 
   return (
-    <label className={cn('flex flex-col gap-1', className)}>
-      <span className="text-xs font-semibold text-ink2">{label}</span>
+    <label className={cn('flex flex-col gap-1.5', className)}>
+      <span className="text-caption font-semibold text-ink2">{label}</span>
       {control}
-      {error && (
-        <span id={errorId} className="text-[11px] text-danger">
-          {error}
-        </span>
-      )}
+      {hint && !error && <span className="text-caption text-ink2">{hint}</span>}
+      {error && <FieldError id={errorId}>{error}</FieldError>}
     </label>
+  )
+}
+
+/**
+ * Field-level error. §8 wires it to the control via `aria-describedby`; the
+ * leading glyph keeps the message readable without relying on the red (§4.1).
+ */
+export function FieldError({ id, children }: { id?: string; children: ReactNode }) {
+  return (
+    <span id={id} className="text-caption flex items-start gap-1 text-status-danger">
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 20 20"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        aria-hidden="true"
+        className="mt-0.5 flex-none"
+      >
+        <circle cx="10" cy="10" r="7" />
+        <path d="M10 6.5v4.2M10 13.5h.01" />
+      </svg>
+      {children}
+    </span>
   )
 }
 
@@ -47,7 +80,7 @@ export function TextInput({ className, ...rest }: InputHTMLAttributes<HTMLInputE
 
 export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select className={cn(inputClassName, className)} {...rest}>
+    <select className={cn(inputClassName, 'appearance-none pr-9', className)} {...rest}>
       {children}
     </select>
   )
@@ -77,23 +110,23 @@ function EyeIcon({ off }: { off: boolean }) {
 
 // Password field with an unmask toggle. The toggle is type="button" so it never
 // submits the form; aria-pressed + a dynamic aria-label expose its state, and a
-// visually-hidden warning (per the forms a11y guide) tells assistive-tech users
-// that revealing prints the password on screen. All other input props (name,
-// autoComplete, required, minLength, placeholder…) pass through unchanged.
+// visually-hidden warning tells assistive-tech users that revealing prints the
+// password on screen. `focus-ring` puts the §8 outline on the whole composite
+// when either child takes keyboard focus. All other input props pass through.
 export function PasswordInput({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
   const [revealed, setRevealed] = useState(false)
   const warningId = useId()
   return (
     <div
       className={cn(
-        'flex items-stretch rounded-[12px] border border-line bg-paper focus-within:border-ink',
+        'focus-ring flex min-h-11 items-stretch rounded-control border border-line bg-paper transition-colors duration-(--dur-state) hover:border-ink3 focus-within:border-ink',
         className,
       )}
     >
       <input
         {...rest}
         type={revealed ? 'text' : 'password'}
-        className="w-full bg-transparent px-3 py-2.5 text-sm outline-none"
+        className="text-body w-full bg-transparent px-3 py-2.5 text-ink outline-none placeholder:text-ink3"
       />
       <button
         type="button"
@@ -101,7 +134,7 @@ export function PasswordInput({ className, ...rest }: InputHTMLAttributes<HTMLIn
         aria-pressed={revealed}
         aria-label={revealed ? '비밀번호 숨기기' : '비밀번호 표시'}
         aria-describedby={warningId}
-        className="flex items-center px-3 text-ink3 hover:text-ink"
+        className="pressable flex w-11 items-center justify-center rounded-r-control text-ink3 hover:text-ink"
       >
         <EyeIcon off={revealed} />
       </button>
@@ -112,31 +145,59 @@ export function PasswordInput({ className, ...rest }: InputHTMLAttributes<HTMLIn
   )
 }
 
+/**
+ * Amount entry. §6.5 makes this the strongest visual element in the transaction
+ * sheet, so the figure renders at hero scale with tabular figures and the ₩ mark
+ * stays quiet beside it.
+ */
 export function AmountInput({
   value,
   onChange,
+  size = 'field',
+  autoFocus,
   'aria-label': ariaLabel,
   'aria-invalid': ariaInvalid,
   'aria-describedby': ariaDescribedby,
 }: {
   value: string
   onChange: (v: string) => void
+  /**
+   * `hero` is the transaction sheet, where §6.5 makes the amount the strongest
+   * element on screen. `field` is every other amount — a budget, a goal, a
+   * recurring amount — which is one field among several and must not shout over
+   * the fields around it.
+   */
+  size?: 'hero' | 'field'
+  /** Marks this as the sheet's focus entry point — see BottomSheet. */
+  autoFocus?: boolean
   'aria-label'?: string
   'aria-invalid'?: boolean
   'aria-describedby'?: string
 }) {
+  const hero = size === 'hero'
   return (
-    <div className="flex items-center rounded-[12px] border border-line bg-paper px-3">
-      <span className="text-sm text-ink3">₩</span>
+    <div
+      className={cn(
+        'focus-ring flex items-baseline gap-2 border border-line bg-paper transition-colors duration-(--dur-state) hover:border-ink3 focus-within:border-ink',
+        hero ? 'rounded-hero px-4 py-3.5' : 'min-h-11 rounded-control px-3 py-2.5',
+      )}
+    >
+      <span aria-hidden className={cn('text-ink3', hero ? 'text-title' : 'text-body')}>
+        ₩
+      </span>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         inputMode="numeric"
         placeholder="0"
+        data-autofocus={autoFocus ? '' : undefined}
         aria-label={ariaLabel}
         aria-invalid={ariaInvalid}
         aria-describedby={ariaDescribedby}
-        className="tnum w-full bg-transparent px-2 py-2.5 text-right text-sm outline-none"
+        className={cn(
+          'tnum w-full bg-transparent text-right text-ink outline-none placeholder:text-ink3',
+          hero ? 'text-hero' : 'text-body',
+        )}
       />
     </div>
   )

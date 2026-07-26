@@ -57,3 +57,7 @@ supabase/.temp/
 dist/
 .env
 CLAUDE.md
+.agents/
+.claude/
+coverage/
+skills-lock.json

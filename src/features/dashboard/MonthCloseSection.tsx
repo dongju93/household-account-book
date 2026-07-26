@@ -15,6 +15,7 @@ import { getAiUserSettings } from '../../data/aiSettings'
 import { describeError } from '../../data/errors'
 import type { MonthCloseFinding } from '../../domain/monthClose'
 import { currentYearMonth, type YearMonth } from '../../lib/month'
+import { ErrorBanner, Skeleton, SkeletonScreen, TextAction } from '../../ui'
 
 /**
  * 월 마감 점검 접이식 섹션 (S07 / PR-7, spec §5.5).
@@ -106,57 +107,85 @@ export function MonthCloseSection({ ledgerId, ym }: { ledgerId: string; ym: Year
   const aiHidden = narrState.kind === 'hidden'
 
   return (
-    <section className="rounded-[16px] border border-line bg-paper px-4 py-3.5">
+    <section className="rounded-surface border border-line bg-paper">
+      {/* §6.3: the expand/collapse behaviour and contents are unchanged; only the
+          trigger's visual state is made explicit — a full-width 44px row with the
+          shared hover/press/focus states and a chevron that follows aria-expanded. */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between"
+        className="pressable flex min-h-12 w-full items-center justify-between gap-3 rounded-surface px-4 py-3 text-left hover:bg-fill1"
       >
-        <span className="text-[13.5px] font-bold">월 마감 점검</span>
-        <span aria-hidden className="text-[11.5px] text-ink3">
+        <span className="text-section text-ink">월 마감 점검</span>
+        <span className="text-caption flex items-center gap-1.5 text-ink2">
           {open ? '접기' : '펼치기'}
+          <svg
+            width="12"
+            height="8"
+            viewBox="0 0 12 8"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className={
+              'transition-transform duration-(--dur-state) ease-(--ease-emphasized) ' +
+              (open ? 'rotate-180' : '')
+            }
+          >
+            <path d="M1 2l5 4 5-4" />
+          </svg>
         </span>
       </button>
 
       {open && (
-        <div className="mt-2">
-          {reviewLoading && <p className="text-[12px] text-ink3">점검 데이터를 불러오는 중…</p>}
-          {reviewError && <p className="text-[11.5px] text-danger">{reviewError.message}</p>}
+        <div className="flex flex-col gap-3 border-t border-line-soft px-4 py-3">
+          {reviewLoading && (
+            <SkeletonScreen label="점검 데이터를 불러오는 중…" className="gap-2">
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-[75%]" />
+            </SkeletonScreen>
+          )}
+          {reviewError && <ErrorBanner message={reviewError.message} />}
 
           {review && (
             <>
               {findingsCount === 0 ? (
-                <p className="text-[12.5px] leading-relaxed text-ink2">
+                <p className="text-body text-ink2 text-pretty">
                   특이사항이 없습니다. (카테고리 {review.noIssueSummary.categoriesChecked}개 · 거래{' '}
                   {review.noIssueSummary.transactionsChecked}건 점검)
                 </p>
               ) : (
                 <>
+                  {/* §3.1: the LLM summary keeps its own `fill1` surface, the same
+                      one AiInsightCard uses, so it never reads as a domain finding. */}
                   {!aiHidden &&
                     (narrativeLoading ? (
-                      <p className="text-[12px] text-ink3">요약 생성 중…</p>
+                      <SkeletonScreen
+                        label="요약 생성 중…"
+                        className="gap-2 rounded-surface bg-fill1 p-3"
+                      >
+                        <Skeleton className="h-3 w-full" />
+                        <Skeleton className="h-3 w-[70%]" />
+                      </SkeletonScreen>
                     ) : narrState.kind === 'ok' ? (
-                      <div className="mb-2 flex items-start justify-between gap-2">
-                        <p className="text-[12.5px] leading-relaxed text-ink2">
-                          {narrState.narrative}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={regenerate}
-                          className="shrink-0 text-[11.5px] font-semibold text-ink3"
-                        >
-                          다시 생성
-                        </button>
+                      <div className="flex flex-col gap-2 rounded-surface bg-fill1 p-3">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <span className="text-caption text-ink2">AI가 작성한 요약</span>
+                          <TextAction onClick={regenerate}>다시 생성</TextAction>
+                        </div>
+                        <SummaryText narrative={narrState.narrative} />
                       </div>
                     ) : narrState.kind === 'error' ? (
-                      <p className="mb-2 text-[11.5px] text-danger">{narrState.message}</p>
+                      <p className="text-caption text-status-danger">{narrState.message}</p>
                     ) : null)}
 
-                  <FindingGroup title="확인 필요" findings={review.needsCheck} />
-                  <FindingGroup title="참고" findings={review.forReference} />
+                  <FindingGroup title="확인 필요" findings={review.needsCheck} tone="danger" />
+                  <FindingGroup title="참고" findings={review.forReference} tone="info" />
                   {review.truncated && (
-                    <p className="mt-1.5 text-[11px] text-ink3">항목이 많아 일부만 표시했습니다.</p>
+                    <p className="text-caption text-ink2">항목이 많아 일부만 표시했습니다.</p>
                   )}
                 </>
               )}
@@ -168,14 +197,69 @@ export function MonthCloseSection({ ledgerId, ym }: { ledgerId: string; ym: Year
   )
 }
 
-function FindingGroup({ title, findings }: { title: string; findings: MonthCloseFinding[] }) {
+/**
+ * Splits the model's summary into display lines, dropping any leading markdown
+ * bullet marker. Exported for the test; pure string work, no domain meaning.
+ */
+export function summaryLines(narrative: string): string[] {
+  return narrative
+    .split('\n')
+    .map((line) => line.replace(/^\s*[-*•]\s+/, '').trim())
+    .filter(Boolean)
+}
+
+/**
+ * The prompt asks for prose, but the model routinely answers with a markdown
+ * list. HTML collapses the newlines, so a single <p> rendered it as one run-on
+ * paragraph with literal hyphens ("- 식비… - 주거…"). Render the bullets as an
+ * actual list and let a genuine single paragraph stay a paragraph.
+ */
+function SummaryText({ narrative }: { narrative: string }) {
+  const lines = summaryLines(narrative)
+  if (lines.length <= 1) {
+    return <p className="text-body text-ink2 text-pretty">{lines[0] ?? narrative}</p>
+  }
+  return (
+    <ul className="flex list-disc flex-col gap-1 pl-4">
+      {lines.map((line) => (
+        <li key={line} className="text-body text-ink2 text-pretty">
+          {line}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/**
+ * Findings are domain output, so they stay on the plain surface. The group title
+ * carries a status tint plus its own words — §4.1 forbids colour-only meaning,
+ * so "확인 필요" and "참고" remain distinguishable in greyscale.
+ */
+function FindingGroup({
+  title,
+  findings,
+  tone,
+}: {
+  title: string
+  findings: MonthCloseFinding[]
+  tone: 'danger' | 'info'
+}) {
   if (findings.length === 0) return null
   return (
-    <div className="mt-1.5">
-      <div className="mb-1 text-[11px] font-semibold text-ink3">{title}</div>
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-1.5">
+        <span
+          aria-hidden
+          className={
+            'h-1.5 w-1.5 rounded-full ' +
+            (tone === 'danger' ? 'bg-status-danger' : 'bg-status-info')
+          }
+        />
+        <h3 className="text-caption font-semibold text-ink2">{title}</h3>
+      </div>
       <ul className="flex flex-col gap-1">
         {findings.map((f) => (
-          <li key={`${f.kind}:${f.label}`} className="tnum text-[12px] leading-relaxed text-ink2">
+          <li key={`${f.kind}:${f.label}`} className="tnum text-body text-ink2 text-pretty">
             {f.label}
           </li>
         ))}

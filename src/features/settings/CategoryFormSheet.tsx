@@ -91,14 +91,15 @@ export function CategoryFormSheet({
 
   return (
     <BottomSheet open={open} onClose={onClose} title={editing ? '카테고리 수정' : '카테고리 추가'}>
-      <div className="flex flex-col gap-3">
-        <Field label="구분">
+      <div className="flex flex-col gap-4">
+        <Field label="구분" hint={editing ? '구분은 변경할 수 없습니다.' : undefined}>
           {editing ? (
-            <p className="rounded-[12px] border border-line bg-fill1 px-3 py-2.5 text-sm text-ink2">
+            <p className="text-body min-h-11 rounded-control border border-line bg-fill1 px-3 py-2.5 text-ink2">
               {fundTypeLabel(type)}
             </p>
           ) : (
             <Segmented
+              label="자금 구분"
               items={FUND_TYPE_ITEMS}
               value={type}
               onChange={(next) => {
@@ -109,7 +110,6 @@ export function CategoryFormSheet({
               }}
             />
           )}
-          {editing && <p className="mt-1 text-[11px] text-ink3">구분은 변경할 수 없습니다.</p>}
         </Field>
 
         <Field label="이름" error={errors.name}>
@@ -121,20 +121,29 @@ export function CategoryFormSheet({
         </Field>
 
         <Field label="아이콘">
-          <div className="flex flex-wrap gap-2 rounded-[12px] border border-line bg-paper p-2">
+          {/* Icon labels are the §4.2 icon-adjacent exception, but 9.5px was well
+              past it — they now sit on the `micro` step (11px) with a 44px tall
+              target, which also satisfies §8 for a grid this dense. */}
+          <div
+            role="group"
+            aria-label="아이콘"
+            className="flex flex-wrap gap-1 rounded-surface border border-line bg-paper p-2"
+          >
             {ALL_GLYPH_KEYS.map((key) => (
               <button
                 key={key}
                 type="button"
+                aria-pressed={icon === key}
                 onClick={() => setIcon(key)}
-                title={GLYPH_LABELS[key]}
                 className={
-                  'flex flex-col items-center gap-1 rounded-[10px] px-2.5 py-2 transition-colors ' +
-                  (icon === key ? 'bg-ink text-white' : 'text-ink2 hover:bg-fill2')
+                  'pressable flex min-h-11 w-14 flex-col items-center justify-center gap-1 rounded-control px-1 py-1.5 ' +
+                  (icon === key ? 'bg-ink text-paper' : 'text-ink2 hover:bg-fill1 hover:text-ink')
                 }
               >
                 <Glyph name={key} size={18} />
-                <span className="text-[9.5px] leading-none font-medium">{GLYPH_LABELS[key]}</span>
+                <span className="text-micro w-full truncate text-center leading-none">
+                  {GLYPH_LABELS[key]}
+                </span>
               </button>
             ))}
           </div>
@@ -145,10 +154,10 @@ export function CategoryFormSheet({
             <Field label="예산 (월)" error={errors.budgetAmount}>
               <AmountInput value={budget} onChange={setBudget} />
             </Field>
-            <div className="flex items-center justify-between rounded-[12px] border border-line bg-paper px-3 py-2.5">
-              <div>
-                <div className="text-xs font-semibold text-ink2">예산 페이스 표시</div>
-                <p className="mt-0.5 text-[11px] text-ink3">
+            <div className="flex items-start justify-between gap-3 rounded-surface border border-line bg-paper px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="text-body font-semibold text-ink">예산 페이스 표시</p>
+                <p className="text-caption mt-0.5 text-ink2 text-pretty">
                   달성 확인에 남은 일수·하루 허용액을 표시합니다.
                 </p>
               </div>
@@ -156,6 +165,7 @@ export function CategoryFormSheet({
                 on={showBudgetPace}
                 onChange={setShowBudgetPace}
                 disabled={budget.trim() === ''}
+                label="예산 페이스 표시"
               />
             </div>
           </>
@@ -166,14 +176,14 @@ export function CategoryFormSheet({
           </Field>
         )}
         {!hasBudget(type) && !hasGoal(type) && (
-          <p className="text-[12px] text-ink3">
+          <p className="text-caption text-ink2">
             {fundTypeLabel(type)} 카테고리는 예산/목표가 없습니다.
           </p>
         )}
 
         {submitError && <ErrorBanner message={submitError} />}
 
-        <Button onClick={handleSubmit} disabled={saving} className="mt-1">
+        <Button onClick={handleSubmit} disabled={saving}>
           {saving ? '저장 중…' : '저장'}
         </Button>
       </div>

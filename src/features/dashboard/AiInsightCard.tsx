@@ -1,5 +1,3 @@
-import { useState } from 'react'
-
 import { invokeAiFeature, isAiClientError } from '../../ai/client'
 import { dataVersionHash, stableStringify } from '../../ai/hash'
 import {
@@ -12,20 +10,23 @@ import { useAuth } from '../../auth/useAuth'
 import { getAiUserSettings } from '../../data/aiSettings'
 import { describeError } from '../../data/errors'
 import { polishInsightBullets } from '../../domain/ai/polishInsightText'
-import { pickSavingTip } from '../../domain/ai/savingTipTemplates'
+import { Skeleton, SkeletonScreen, TextAction } from '../../ui'
 
 /**
- * AI 월간 인사이트 카드 (S06 / PR-6, spec §5.3 + §5.11).
+ * AI 월간 인사이트 카드 (S06 / PR-6, spec §5.3).
  *
  * Numbers on screen stay domain-bound (SummaryCards/AchievementList); this card
  * renders LLM coaching bullets only, from aggregates built by
- * `buildMonthInsightInput`. Template tips underneath are pure domain actions.
- * Hidden entirely when the user opted out (Edge re-enforces server-side).
- * `flag_off` (ops kill switch) hides the AI bullets quietly but keeps the
- * zero-cost template tips, which never duplicate `formatPaceHint` sentences.
+ * `buildMonthInsightInput`. Hidden entirely when the user opted out (Edge
+ * re-enforces server-side) and when `flag_off` (ops kill switch) is on.
  * 다시 생성 re-invokes AI (same aggregates + `MONTH_INSIGHT_PROMPT_REV` → cache
- * hit, no quota) and advances the offline tip rotation so the tip always
- * changes when the pool has more than one candidate.
+ * hit, no quota), so it acts as a retry after an error rather than a reroll.
+ *
+ * The §5.11 offline 절약 팁 pool used to render under the bullets; it was
+ * dropped because it was built from the same three aggregates the LLM already
+ * receives (summary/achievements/topExpenses) and only restated them in weaker
+ * form — including "다음 달 한도를 재조정" advice the month_insight prompt now
+ * explicitly forbids as arithmetically meaningless.
  */
 
 type InsightState =
@@ -34,19 +35,9 @@ type InsightState =
   | { kind: 'ok'; bullets: string[]; cached: boolean }
   | { kind: 'error'; message: string }
 
-export function AiInsightCard({
-  ledgerId,
-  input,
-  tips,
-}: {
-  ledgerId: string
-  input: MonthInsightInput
-  /** Ordered offline tip pool; card shows one and rotates on 「다시 생성」. */
-  tips: readonly string[]
-}) {
+export function AiInsightCard({ ledgerId, input }: { ledgerId: string; input: MonthInsightInput }) {
   const { user } = useAuth()
   const userId = user?.id
-  const [tipRotation, setTipRotation] = useState(0)
   const { data: settings } = useAsyncData(
     () => (userId ? getAiUserSettings(userId) : Promise.resolve(null)),
     [userId],
@@ -102,54 +93,42 @@ export function AiInsightCard({
   if (!enabled) return null
 
   const state: InsightState = insight ?? { kind: 'idle' }
-  const aiHidden = state.kind === 'hidden'
-  const activeTip = pickSavingTip(tips, tipRotation)
-  if (aiHidden && !activeTip) return null
-
-  const handleRegenerate = () => {
-    // Tip pool advances even when AI is a free cache hit — otherwise the button
-    // looks dead for offline tips (user report: 절약 팁이 다시 생성되지 않음).
-    if (tips.length > 1) setTipRotation((n) => n + 1)
-    reload()
-  }
+  if (state.kind === 'hidden') return null
 
   return (
-    <section className="rounded-[16px] border border-line bg-paper px-4 py-3.5">
-      <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-[13.5px] font-bold">AI 인사이트</span>
-        {!aiHidden && (
-          <button
-            type="button"
-            onClick={handleRegenerate}
-            disabled={loading}
-            className="text-[11.5px] font-semibold text-ink3 disabled:opacity-50"
-          >
-            다시 생성
-          </button>
-        )}
+    // §3.1: AI output sits on a different surface from the calculated numbers —
+    // borderless `fill1` rather than a bordered `paper` card — so the trust
+    // boundary between "what the ledger says" and "what a model wrote" is
+    // visible before the text is read. The `aside` names it as advice.
+    <section className="rounded-surface bg-fill1 px-4 py-3.5">
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <div className="flex items-baseline gap-2">
+          <h2 className="text-section text-ink">AI 인사이트</h2>
+          <span className="text-caption text-ink2">AI가 작성한 조언</span>
+        </div>
+        <TextAction onClick={reload} disabled={loading}>
+          다시 생성
+        </TextAction>
       </div>
 
-      {!aiHidden &&
-        (loading ? (
-          <p className="text-[12px] text-ink3">인사이트 생성 중…</p>
-        ) : state.kind === 'ok' ? (
-          <ul className="list-disc space-y-1 pl-4">
-            {state.bullets.map((b) => (
-              <li key={b} className="text-[12.5px] leading-relaxed text-ink2">
-                {b}
-              </li>
-            ))}
-          </ul>
-        ) : state.kind === 'error' ? (
-          <p className="text-[11.5px] text-danger">{state.message}</p>
-        ) : null)}
-
-      {activeTip && (
-        <div className={aiHidden ? undefined : 'mt-2.5 border-t border-line-soft pt-2'}>
-          <div className="mb-1 text-[11px] font-semibold text-ink3">절약 팁</div>
-          <p className="tnum text-[12px] leading-relaxed text-ink2">{activeTip}</p>
-        </div>
-      )}
+      {loading ? (
+        <SkeletonScreen label="인사이트 생성 중…" className="gap-2 py-0.5">
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-[85%]" />
+          <Skeleton className="h-3 w-[70%]" />
+        </SkeletonScreen>
+      ) : state.kind === 'ok' ? (
+        <ul className="flex flex-col gap-1.5">
+          {state.bullets.map((b) => (
+            <li key={b} className="text-body flex gap-2 text-ink2 text-pretty">
+              <span aria-hidden className="mt-2 h-1 w-1 flex-none rounded-full bg-ink3" />
+              {b}
+            </li>
+          ))}
+        </ul>
+      ) : state.kind === 'error' ? (
+        <p className="text-caption text-status-danger">{state.message}</p>
+      ) : null}
     </section>
   )
 }
