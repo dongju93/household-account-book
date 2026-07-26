@@ -113,13 +113,13 @@ export function DashboardPage() {
         {!loading && !error && (
           <>
             <SummaryCards summary={summary} />
+            {ledgerId && <MonthCloseSection ledgerId={ledgerId} ym={ym} />}
+            {ledgerId && <AiInsightCard ledgerId={ledgerId} input={insightInput} />}
             <AchievementList
               rows={achievements}
               paceByCategoryId={paceLookup}
               isCurrentMonth={showPace}
             />
-            {ledgerId && <MonthCloseSection ledgerId={ledgerId} ym={ym} />}
-            {ledgerId && <AiInsightCard ledgerId={ledgerId} input={insightInput} />}
             <DashboardCharts breakdown={breakdown} summary={summary} trend={trend} />
           </>
         )}
