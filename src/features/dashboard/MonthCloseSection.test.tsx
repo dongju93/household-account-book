@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
+import { AiSettingsProvider } from '../../ai/AiSettingsProvider'
 import type { MonthCloseReviewData } from '../../ai/loadMonthCloseForNarrative'
 import type { AiGatewayOkResponse, MonthCloseNarrativeResult } from '../../ai/types'
 import { AuthContext, type AuthValue } from '../../auth/authContext'
@@ -99,7 +100,9 @@ function renderSection(ym = PAST, { canEdit = true }: { canEdit?: boolean } = {}
   return render(
     <AuthContext.Provider value={auth}>
       <LedgerContext.Provider value={ledger}>
-        <MonthCloseSection ledgerId={LEDGER_ID} ym={ym} />
+        <AiSettingsProvider>
+          <MonthCloseSection ledgerId={LEDGER_ID} ym={ym} />
+        </AiSettingsProvider>
       </LedgerContext.Provider>
     </AuthContext.Provider>,
   )

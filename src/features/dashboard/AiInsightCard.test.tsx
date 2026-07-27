@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
+import { AiSettingsProvider } from '../../ai/AiSettingsProvider'
 import type { AiGatewayOkResponse, MonthInsightInput, MonthInsightResult } from '../../ai/types'
 import { AuthContext, type AuthValue } from '../../auth/authContext'
 import type { AiUserSettings } from '../../data/aiSettings'
@@ -68,7 +69,9 @@ function renderCard() {
   }
   return render(
     <AuthContext.Provider value={auth}>
-      <AiInsightCard ledgerId={LEDGER_ID} input={INPUT} />
+      <AiSettingsProvider>
+        <AiInsightCard ledgerId={LEDGER_ID} input={INPUT} />
+      </AiSettingsProvider>
     </AuthContext.Provider>,
   )
 }

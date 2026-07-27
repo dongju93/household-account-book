@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
+import { AiSettingsProvider } from '../../ai/AiSettingsProvider'
 import type { AiGatewayOkResponse, NlTxnParseResult } from '../../ai/types'
 import { AuthContext, type AuthValue } from '../../auth/authContext'
 import { LedgerContext, type LedgerValue } from '../../auth/ledgerContext'
@@ -89,14 +90,16 @@ function renderSheet({ canEdit = true }: { canEdit?: boolean } = {}) {
   return render(
     <AuthContext.Provider value={auth}>
       <LedgerContext.Provider value={ledger}>
-        <TransactionSheet
-          open
-          onClose={() => {}}
-          ledgerId={LEDGER_ID}
-          transaction={null}
-          categories={CATEGORIES}
-          onSaved={() => {}}
-        />
+        <AiSettingsProvider>
+          <TransactionSheet
+            open
+            onClose={() => {}}
+            ledgerId={LEDGER_ID}
+            transaction={null}
+            categories={CATEGORIES}
+            onSaved={() => {}}
+          />
+        </AiSettingsProvider>
       </LedgerContext.Provider>
     </AuthContext.Provider>,
   )

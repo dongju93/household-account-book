@@ -3,10 +3,8 @@ import { useState } from 'react'
 import { invokeAiFeature, isAiClientError } from '../../ai/client'
 import { AI_LIMITS } from '../../ai/types'
 import type { NlTxnParseInput, NlTxnParseResult } from '../../ai/types'
-import { useAsyncData } from '../../app/useAsyncData'
-import { useAuth } from '../../auth/useAuth'
+import { useAiSettings } from '../../ai/useAiSettings'
 import { useLedger } from '../../auth/useLedger'
-import { getAiUserSettings } from '../../data/aiSettings'
 import { describeError } from '../../data/errors'
 import { normalizeNlTxnDraft } from '../../domain/ai/nlTxnDraft'
 import type { NlTxnDraftNormalized } from '../../domain/ai/nlTxnDraft'
@@ -31,19 +29,17 @@ export function NlDraftField({
   onDraft: (draft: NlTxnDraftNormalized) => void
 }) {
   const { canEdit } = useLedger()
-  const { user } = useAuth()
-  const userId = user?.id
-  const { data: settings } = useAsyncData(
-    () => (userId ? getAiUserSettings(userId) : Promise.resolve(null)),
-    [userId],
-  )
+  // Session-resolved, so the block is present in the sheet's first painted frame
+  // instead of arriving a round trip after the entrance and shoving the form
+  // down. See AiSettingsProvider.
+  const { enabled: aiEnabled } = useAiSettings()
   const [text, setText] = useState('')
   const [applying, setApplying] = useState(false)
   const [warnings, setWarnings] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [applied, setApplied] = useState(false)
 
-  if (!canEdit || !settings?.inAppAiEnabled) return null
+  if (!canEdit || !aiEnabled) return null
 
   async function handleApply() {
     const trimmed = text.trim()
@@ -105,7 +101,12 @@ export function NlDraftField({
           type="button"
           onClick={() => void handleApply()}
           disabled={applying || !text.trim()}
-          className="pressable text-body min-h-11 flex-none rounded-control bg-ink px-4 font-bold text-paper enabled:hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-50"
+          // Outlined, not solid ink. Two filled ink buttons in one sheet — 적용
+          // and 저장 — both claimed to be *the* action, and the one that actually
+          // commits the transaction sat at the bottom while the AI helper shouted
+          // from the top. Demoting this to a bordered control leaves exactly one
+          // primary button in the sheet, which is what makes the hierarchy legible.
+          className="pressable text-body min-h-11 flex-none rounded-control border border-line bg-paper px-4 font-semibold text-ink enabled:hover:border-ink3 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {applying ? '해석 중…' : '적용'}
         </button>

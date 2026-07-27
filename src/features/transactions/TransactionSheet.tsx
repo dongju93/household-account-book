@@ -136,9 +136,12 @@ export function TransactionSheet({
         <Segmented label="자금 구분" items={FUND_TYPE_ITEMS} value={type} onChange={changeType} />
 
         {/* §6.5: the amount is the sheet's strongest visual element — hero type on
-            a hero-radius surface, and the sheet's focus entry point in create mode. */}
+            a hero-radius surface, and the sheet's focus entry point in create mode.
+            It carries no caption: a ₩ mark beside a 32px figure is not a field
+            anyone needs told, and the caption only served to make the row look
+            like every other field — the opposite of what §6.5 asks for. The
+            accessible name is on the input itself, so nothing is lost for AT. */}
         <div className="flex flex-col gap-1.5">
-          <span className="text-caption font-semibold text-ink2">금액</span>
           <AmountInput
             value={amount}
             onChange={setAmount}
@@ -194,18 +197,17 @@ export function TransactionSheet({
         </div>
         {errors.date && <FieldError id={dateErrorId}>{errors.date}</FieldError>}
 
-        {/* §6.5: say what "저장 후 계속" actually preserves, so the next empty
-            form is not a surprise. Behaviour is unchanged. */}
+        {/* An off-by-default preference for repeat entry, demoted to a plain row.
+            It was a tinted card carrying a bold title and a two-line explanation
+            — the visual weight of a primary control for something most sessions
+            never touch, and the third nested surface in a sheet that only needed
+            one. The explanation moves into the label itself: "…만 남기고" says
+            what is preserved in the space the title alone used to take. */}
         {!editing && (
-          <div className="flex items-start justify-between gap-3 rounded-surface bg-fill1 px-3 py-2.5">
-            <span className="min-w-0">
-              <span className="text-body block font-semibold text-ink">저장 후 계속 입력</span>
-              <span className="text-caption block text-ink2 text-pretty">
-                날짜와 구분은 그대로 두고 금액·카테고리·메모만 비웁니다.
-              </span>
-            </span>
+          <label className="flex items-center justify-between gap-3">
+            <span className="text-caption text-ink2">날짜·구분만 남기고 계속 입력</span>
             <Toggle on={keepOpen} onChange={setKeepOpen} label="저장 후 계속 입력" />
-          </div>
+          </label>
         )}
 
         {submitError && <ErrorBanner message={submitError} />}

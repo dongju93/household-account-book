@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
+import { AiSettingsProvider } from '../../ai/AiSettingsProvider'
 import { AuthContext, type AuthValue } from '../../auth/authContext'
 import { LedgerContext, type LedgerValue } from '../../auth/ledgerContext'
 import type { AiUserSettings } from '../../data/aiSettings'
@@ -50,7 +51,9 @@ function renderSettings() {
   return render(
     <AuthContext.Provider value={auth}>
       <LedgerContext.Provider value={ledger}>
-        <InAppAiSettings />
+        <AiSettingsProvider>
+          <InAppAiSettings />
+        </AiSettingsProvider>
       </LedgerContext.Provider>
     </AuthContext.Provider>,
   )

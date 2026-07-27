@@ -7,11 +7,10 @@ import {
   loadMonthCloseForNarrative,
 } from '../../ai/loadMonthCloseForNarrative'
 import { MONTH_CLOSE_NARRATIVE_PROMPT_REV, type MonthCloseNarrativeResult } from '../../ai/types'
+import { useAiSettings } from '../../ai/useAiSettings'
 import { useAsyncData } from '../../app/useAsyncData'
 import { useRefresh } from '../../app/useRefresh'
-import { useAuth } from '../../auth/useAuth'
 import { useLedger } from '../../auth/useLedger'
-import { getAiUserSettings } from '../../data/aiSettings'
 import { describeError } from '../../data/errors'
 import type { MonthCloseFinding } from '../../domain/monthClose'
 import { currentYearMonth, type YearMonth } from '../../lib/month'
@@ -42,17 +41,11 @@ type NarrativeState =
   | { kind: 'error'; message: string }
 
 export function MonthCloseSection({ ledgerId, ym }: { ledgerId: string; ym: YearMonth }) {
-  const { user } = useAuth()
-  const userId = user?.id
   const { canEdit } = useLedger()
   const { version } = useRefresh()
   const [open, setOpen] = useState(false)
 
-  const { data: settings } = useAsyncData(
-    () => (userId ? getAiUserSettings(userId) : Promise.resolve(null)),
-    [userId],
-  )
-  const enabled = settings?.inAppAiEnabled === true
+  const { enabled } = useAiSettings()
 
   const now = currentYearMonth()
   const isPastMonth = ym.year < now.year || (ym.year === now.year && ym.month < now.month)

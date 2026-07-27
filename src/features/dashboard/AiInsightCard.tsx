@@ -5,9 +5,8 @@ import {
   type MonthInsightInput,
   type MonthInsightResult,
 } from '../../ai/types'
+import { useAiSettings } from '../../ai/useAiSettings'
 import { useAsyncData } from '../../app/useAsyncData'
-import { useAuth } from '../../auth/useAuth'
-import { getAiUserSettings } from '../../data/aiSettings'
 import { describeError } from '../../data/errors'
 import { polishInsightBullets } from '../../domain/ai/polishInsightText'
 import { Skeleton, SkeletonScreen, TextAction } from '../../ui'
@@ -36,13 +35,7 @@ type InsightState =
   | { kind: 'error'; message: string }
 
 export function AiInsightCard({ ledgerId, input }: { ledgerId: string; input: MonthInsightInput }) {
-  const { user } = useAuth()
-  const userId = user?.id
-  const { data: settings } = useAsyncData(
-    () => (userId ? getAiUserSettings(userId) : Promise.resolve(null)),
-    [userId],
-  )
-  const enabled = settings?.inAppAiEnabled === true
+  const { enabled } = useAiSettings()
 
   // Aggregates change → key changes → re-fetch (cache hit unless data moved).
   const inputKey = stableStringify(input)

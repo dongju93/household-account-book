@@ -100,7 +100,20 @@
 
   /* ── Motion (§7.2) ──────────────────────────────────────────────────────── */
   --ease-emphasized: cubic-bezier(0.23, 1, 0.32, 1);
-  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  /*
+    Sheet travel. Measured on the real panel via the Web Animations API, the
+    previous `cubic-bezier(0.32, 0.72, 0, 1)` (the iOS/Vaul drawer curve) put
+    66% of the distance into the first 20% of the duration and then spread the
+    final 5% across the last 65% — a fling followed by a visible hang, which is
+    read as a spring, not as weight. That curve's second control point sits at
+    x = 0, which is what flattens the tail; it only survives in iOS because the
+    system pairs it with a physical rubber-band, and nothing here does.
+
+    Plain easeOutCubic instead: 50% of the distance at 20% of the time and a
+    fifth of the travel still left for the final 60%, so the sheet decelerates
+    continuously all the way to rest and never appears to stop early.
+  */
+  --ease-drawer: cubic-bezier(0.22, 0.61, 0.36, 1);
   /* A single control-sized overshoot, for the one element in the app that flips
      between two discrete positions (the toggle knob). Physical switches do not
      stop dead at the end of their travel; ~4% past the mark and back is the
@@ -143,11 +156,21 @@
   --dur-press-in: 90ms;
   --dur-press-out: 200ms;
 
-  /* Sheets travel a full viewport height, so they sit at the top of the §7.2
-     panel band. Out is faster than in: dismissing should feel like the sheet
-     getting out of the way, not like watching the entrance in reverse. */
-  --dur-sheet-in: 300ms;
-  --dur-sheet-out: 200ms;
+  /* Sheets travel a full panel height, so they sit at the top of the §7.2 panel
+     band. Out is faster than in: dismissing should feel like the sheet getting
+     out of the way, not like watching the entrance in reverse.
+
+     Duration is bound to `--ease-drawer` and cannot be tuned apart from it. With
+     the old front-loaded curve both ends were wrong for the same reason: at
+     300ms its fast section resolved in ~80ms and the sheet snapped ("파박"), and
+     stretching to 440ms only lengthened the flat tail into a 300ms hang, which
+     reads as a spring ("띠용"). Now that the curve decelerates evenly, duration
+     controls what it should — plain speed — so this pair is the one knob worth
+     turning by feel. 440ms in reads as a deliberate glide; the exit stays
+     noticeably shorter because dismissing should feel like the sheet getting out
+     of the way, not like the entrance played backwards. */
+  --dur-sheet-in: 440ms;
+  --dur-sheet-out: 300ms;
 
   /* Small panel affordances (the 월 마감 caret). Unchanged. */
   --dur-panel: 240ms;
@@ -408,15 +431,43 @@ body {
 
 /* The sheet itself. Its max-height is measured against the overlay, i.e. against
    the *visible* viewport, so the save button stays reachable (by scrolling the
-   body) when the keyboard shrinks it. The 2rem reserve keeps a strip of backdrop
-   tappable for light dismiss — the role 85dvh played before, but as a fixed
-   inset so a keyboard-shrunk viewport gives the form the rest of the space. */
+   body) when the keyboard shrinks it.
+
+   The reserve above the sheet is 5rem, not the 2rem it was. That number is doing
+   perceptual work, not just leaving a light-dismiss target: a modal reads as a
+   *layer over the app* only while the app is still legibly behind it. At 32px
+   the sheet was, to the eye, the whole screen — which is why it stopped feeling
+   like part of this UI and started feeling like a different one. 80px keeps a
+   recognisable band of the page (a card edge, the month header) in view, so the
+   sheet reads as sitting on top of something.
+
+   But the reserve is a luxury, not an invariant, and the expression says so.
+   When the virtual keyboard shrinks the overlay to ~380px, spending 80px of it
+   on scenery would push the save button behind the keyboard — exactly the bug
+   the visualViewport work above exists to prevent. So: take `100% - 5rem` while
+   that still leaves the form a workable 22rem, otherwise fall back toward the
+   full height, never closer than 1.5rem to the top edge (a strip must stay
+   tappable for light dismiss). Tall screen: 80px of backdrop. Keyboard up: the
+   form takes the room back. */
 .sheet-panel {
   display: flex;
   flex-direction: column;
-  max-height: calc(100% - 2rem);
+  max-height: min(calc(100% - 1.5rem), max(calc(100% - 5rem), 22rem));
   transform: translate3d(0, 100%, 0);
   transition: transform var(--dur-sheet-out) var(--ease-drawer);
+}
+
+/* Drag-to-dismiss: while a finger owns the sheet there must be no transition at
+   all, on the panel or on the backdrop dim, or every pointermove would start a
+   new 440ms animation toward the finger and the sheet would visibly lag behind
+   the thumb. Direct manipulation has to be frame-exact — the animation belongs
+   to the release, not to the drag. `data-dragging` lives on the dialog because
+   the backdrop is its pseudo-element and cannot be reached from the panel.
+   BottomSheet.tsx writes the transform and the dim inline; this only removes
+   the timing. */
+.bottom-sheet[data-dragging='true'] .sheet-panel,
+.bottom-sheet[data-dragging='true']::backdrop {
+  transition: none;
 }
 
 .bottom-sheet[open] .sheet-panel {
@@ -439,8 +490,13 @@ body {
     display var(--dur-sheet-out) var(--ease-drawer) allow-discrete;
 }
 
+/* `--sheet-backdrop` is written by the drag gesture so the dim lifts as the
+   sheet is pulled down — the app behind coming back is the feedback that tells
+   the user the drag is going to dismiss. Custom properties reach ::backdrop by
+   inheritance only in newer engines; where they do not, the fallback is the
+   static `1` and the sheet simply drags without the dim responding. */
 .bottom-sheet[open]::backdrop {
-  opacity: 1;
+  opacity: var(--sheet-backdrop, 1);
   transition-duration: var(--dur-sheet-in);
 }
 

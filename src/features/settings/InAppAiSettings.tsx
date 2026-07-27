@@ -1,8 +1,8 @@
 import { useState } from 'react'
 
-import { useAsyncData } from '../../app/useAsyncData'
+import { useAiSettings } from '../../ai/useAiSettings'
 import { useAuth } from '../../auth/useAuth'
-import { getAiUserSettings, setInAppAiEnabled } from '../../data/aiSettings'
+import { setInAppAiEnabled } from '../../data/aiSettings'
 import { describeError } from '../../data/errors'
 import { Card, ErrorBanner, LoadingState, SectionHeader, Toggle } from '../../ui'
 
@@ -18,10 +18,11 @@ import { Card, ErrorBanner, LoadingState, SectionHeader, Toggle } from '../../ui
 export function InAppAiSettings() {
   const { user } = useAuth()
   const userId = user?.id
-  const { data, loading, error, reload } = useAsyncData(
-    () => (userId ? getAiUserSettings(userId) : Promise.reject(new Error('로그인이 필요합니다.'))),
-    [userId],
-  )
+  // The shared session copy, so flipping the toggle here reaches the dashboard
+  // cards and the transaction sheet immediately — previously `reload()` only
+  // refreshed this screen's own fetch and the other surfaces stayed live until a
+  // full page reload.
+  const { settings: data, loading, error, reload } = useAiSettings()
   const [saving, setSaving] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
