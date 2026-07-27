@@ -101,6 +101,11 @@
   /* ── Motion (§7.2) ──────────────────────────────────────────────────────── */
   --ease-emphasized: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  /* A single control-sized overshoot, for the one element in the app that flips
+     between two discrete positions (the toggle knob). Physical switches do not
+     stop dead at the end of their travel; ~4% past the mark and back is the
+     smallest amount that reads as "it snapped" rather than "it slid". */
+  --ease-snap: cubic-bezier(0.34, 1.42, 0.64, 1);
 
   /* ── Elevation — floating nav, sheets and transient menus only (§4.3) ───── */
   --shadow-nav: 0 -1px 0 rgb(39 37 31 / 0.04), 0 -6px 18px rgb(39 37 31 / 0.06);
@@ -118,10 +123,39 @@
   --z-sheet: 50;
 }
 
+/*
+  Durations are split by *what the user is watching*, not by component.
+
+  The previous three tokens gave press, hover, sheets and progress the same two
+  numbers, so every motion in the app moved at one of two speeds regardless of
+  how far it travelled or who initiated it. Distance and intent are what should
+  set duration: a 1px colour swap and a 400px sheet cannot share a number.
+*/
 :root {
+  /* Tint / border / text colour. Short, plain `ease` — the eye tracks these
+     loosely and a strong curve on a colour swap only makes it look laggy. */
   --dur-state: 140ms;
+
+  /* Press feedback is deliberately asymmetric. The push-down is the frame the
+     user is actually looking at, so it must be near-immediate; the release is
+     the system settling and can take its time. Symmetric press feedback is the
+     single most common reason a button feels "mushy". */
+  --dur-press-in: 90ms;
+  --dur-press-out: 200ms;
+
+  /* Sheets travel a full viewport height, so they sit at the top of the §7.2
+     panel band. Out is faster than in: dismissing should feel like the sheet
+     getting out of the way, not like watching the entrance in reverse. */
+  --dur-sheet-in: 300ms;
+  --dur-sheet-out: 200ms;
+
+  /* Small panel affordances (the 월 마감 caret). Unchanged. */
   --dur-panel: 240ms;
-  --dur-progress: 240ms;
+
+  /* Progress fills are explanatory, not interactive — nobody is waiting on
+     them, and they play once per data load. Slower than any UI feedback here
+     precisely so the bar reads as a quantity growing rather than a jump cut. */
+  --dur-progress: 420ms;
 }
 
 html,
@@ -148,37 +182,67 @@ body {
 }
 
 /*
-  Keep keyboard focus discoverable without turning it into the strongest visual
-  state on the screen. Buttons and links keep an outside indicator because their
-  shape does not otherwise change. Form fields use one inset boundary below, so
-  focusing a text input never creates the former nested double outline.
+  Focus indication, in two shapes for two kinds of control.
+
+  Buttons and links get a *detached* ring: `ink` at a 2px offset, so there is a
+  clear gap of surface between the control's own edge and the indicator. The gap
+  is what makes it read as a halo the browser added rather than as the control's
+  border thickening — the previous 1px offset in `ink2` sat so close to the
+  border that on chips and pills the two merged into one fat, muddy edge.
 */
 :where(a, button, summary, [role='switch'], [tabindex]):focus-visible {
-  outline: 2px solid var(--color-ink2);
-  outline-offset: 1px;
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
 }
 
 /*
-  Text-entry controls commonly match :focus-visible even after a pointer click.
-  Reinforcing their existing boundary inward keeps focus visible at 3:1+ without
-  surrounding the whole field with an attention-grabbing outer ring.
+  Text-entry controls get a *soft* ring instead: the border goes to full `ink`
+  and a low-opacity ink halo blooms outside it.
+
+  This exists because focus and hover were previously indistinguishable — hover
+  set `border-ink3`, and focus set `border-ink3` plus a 1px inset shadow of the
+  same colour, which on a 1px border is almost literally the same pixels. A
+  keyboard user had no way to tell a hovered field from the focused one. Now
+  hover is a border darkening and focus is a border darkening *plus* spread, so
+  the two states differ in shape, not only in shade.
+
+  The halo is 10% ink rather than a solid ring so a focused field in a form of
+  five fields does not become the loudest thing on the screen (§4 — the numbers
+  stay the focal point). It reads clearly at 3:1 against `paper` via the border;
+  the halo is the amplifier, not the indicator itself.
 */
 :where(input, select, textarea):focus-visible {
   outline: none;
-  border-color: var(--color-ink3);
-  box-shadow: inset 0 0 0 1px var(--color-ink3);
+  border-color: var(--color-ink);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-ink) 10%, transparent);
 }
 
-/* Composite controls render the same single boundary on their wrapper. */
+/* Composite controls (password, amount) render the same ring on their wrapper. */
 :where(.focus-ring):has(:focus-visible) {
-  border-color: var(--color-ink3);
-  box-shadow: inset 0 0 0 1px var(--color-ink3);
+  border-color: var(--color-ink);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-ink) 10%, transparent);
 }
 
-/* A composite owns the visible ring; do not draw a second square around its
-   borderless child input/button. Keyboard focus remains visible on the wrapper. */
+/*
+  Owned here rather than by a `transition-colors` utility on each component: the
+  halo is a box-shadow, which `transition-colors` does not cover, so a utility
+  would animate the border and hard-cut the ring around it. One declaration for
+  every field keeps the two halves of the same indicator in sync.
+*/
+:where(input, select, textarea, .focus-ring) {
+  transition:
+    border-color var(--dur-state) ease,
+    box-shadow var(--dur-state) ease;
+}
+
+/* A composite owns the visible ring; do not draw a second one around its
+   borderless child input/button. Keyboard focus remains visible on the wrapper.
+   `box-shadow` has to be cleared alongside `outline`, or the field rule above
+   paints its halo on the inner input as well and the amount/password fields end
+   up double-ringed — one halo hugging the input, one hugging the wrapper. */
 :where(.focus-ring > input, .focus-ring > button):focus-visible {
   outline: none;
+  box-shadow: none;
 }
 
 /*
@@ -189,14 +253,29 @@ body {
 */
 @utility pressable {
   transition:
-    transform var(--dur-state) var(--ease-emphasized),
-    background-color var(--dur-state) var(--ease-emphasized),
-    border-color var(--dur-state) var(--ease-emphasized),
-    color var(--dur-state) var(--ease-emphasized),
-    opacity var(--dur-state) var(--ease-emphasized);
+    transform var(--dur-press-out) var(--ease-emphasized),
+    background-color var(--dur-state) ease,
+    border-color var(--dur-state) ease,
+    color var(--dur-state) ease,
+    opacity var(--dur-state) ease;
 
   &:active:not(:disabled):not([aria-disabled='true']) {
-    transform: scale(0.97);
+    /*
+      Press *distance*, not press ratio, is what the eye judges — so a single
+      scale factor cannot serve every control. At the old flat 0.97 the 448px
+      save button's edges travelled ~6.7px (a rubbery, cheap-looking bounce)
+      while the 32px icon buttons moved 0.5px (invisible — those controls read
+      as dead on touch). The factor is therefore a variable each control sets to
+      land in the same ~1–3px perceived range; 0.97 stays the default because it
+      is correct for the mid-sized controls (chips, segmented items, rows).
+
+      Declared as a fallback inside var() rather than as a property on the
+      utility, so a `[--press-scale:…]` class on the element always wins without
+      depending on Tailwind's utility sort order.
+    */
+    transform: scale(var(--press-scale, 0.97));
+    /* Fast down, slow up: the push is the frame the user is watching. */
+    transition-duration: var(--dur-press-in);
   }
 }
 
@@ -219,6 +298,32 @@ body {
   }
 }
 
+/*
+  The same idea for controls that are already wide enough and only short: grows
+  the target vertically to 44px while leaving the width alone, so neighbouring
+  chips in a wrapped row never overlap each other's targets the way a centred
+  44×44 box would.
+
+  This is what lets a chip render at 36px. Chips are the densest repeated
+  control in the app — the 구분 filter row wraps to two lines at 320px, and the
+  category picker in the transaction sheet wraps to four — so 8px per chip is
+  16–32px of scroll returned on the two screens where vertical space is
+  scarcest, with no loss of reach.
+*/
+@utility hit-tall {
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 44px;
+    transform: translateY(-50%);
+  }
+}
+
 /* ── Device safe areas (§5) ────────────────────────────────────────────────
    The fixed tab bar and the bottom sheet are the two surfaces the iOS home
    indicator can overlap; the scroll body must clear the tab bar plus it. */
@@ -230,8 +335,16 @@ body {
   padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
 }
 
+/*
+  Derived from the chrome it has to clear rather than rounded up by eye: the tab
+  bar is 56px, the centre add button overhangs it by 20px, and 12px is the gap
+  that keeps the last row of content from looking wedged under the button. 6.5rem
+  reserved 104px for 76px of chrome, so every screen ended with 28px of dead
+  space that could not be scrolled away — the most expensive kind of empty space
+  on a 480px column, because it is permanent.
+*/
 @utility pb-safe-body {
-  padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 /*
@@ -275,13 +388,22 @@ body {
   justify-content: center;
   overflow: hidden;
   overscroll-behavior: contain;
+  /*
+    A transition is read from the state being transitioned *to*, so the rules
+    below split cleanly: the base rule is the closed state and therefore owns the
+    exit timing, and the `[open]` rule owns the entrance. Every duration on the
+    sheet — panel, backdrop, and these two discrete properties — has to be
+    switched in the same pair, or the dialog would leave the top layer before the
+    panel finished sliding out.
+  */
   transition:
-    overlay var(--dur-panel) var(--ease-drawer) allow-discrete,
-    display var(--dur-panel) var(--ease-drawer) allow-discrete;
+    overlay var(--dur-sheet-out) var(--ease-drawer) allow-discrete,
+    display var(--dur-sheet-out) var(--ease-drawer) allow-discrete;
 }
 
 .bottom-sheet[open] {
   display: flex;
+  transition-duration: var(--dur-sheet-in);
 }
 
 /* The sheet itself. Its max-height is measured against the overlay, i.e. against
@@ -294,11 +416,12 @@ body {
   flex-direction: column;
   max-height: calc(100% - 2rem);
   transform: translate3d(0, 100%, 0);
-  transition: transform var(--dur-panel) var(--ease-drawer);
+  transition: transform var(--dur-sheet-out) var(--ease-drawer);
 }
 
 .bottom-sheet[open] .sheet-panel {
   transform: translate3d(0, 0, 0);
+  transition-duration: var(--dur-sheet-in);
 }
 
 @starting-style {
@@ -311,13 +434,14 @@ body {
   background: color-mix(in srgb, var(--color-ink) 32%, transparent);
   opacity: 0;
   transition:
-    opacity var(--dur-panel) var(--ease-drawer),
-    overlay var(--dur-panel) var(--ease-drawer) allow-discrete,
-    display var(--dur-panel) var(--ease-drawer) allow-discrete;
+    opacity var(--dur-sheet-out) var(--ease-drawer),
+    overlay var(--dur-sheet-out) var(--ease-drawer) allow-discrete,
+    display var(--dur-sheet-out) var(--ease-drawer) allow-discrete;
 }
 
 .bottom-sheet[open]::backdrop {
   opacity: 1;
+  transition-duration: var(--dur-sheet-in);
 }
 
 @starting-style {
@@ -327,22 +451,44 @@ body {
 }
 
 /*
-  §7.2: under prefers-reduced-motion, movement is removed everywhere and only a
-  short opacity change survives. Scoped with :where() on * so it cannot be beaten
-  by a utility class, which is the one place a global override is correct.
+  §7.2: under prefers-reduced-motion, *movement* is removed — not all transition.
+
+  The previous rule collapsed every duration to 0.01ms, which also killed the
+  colour and opacity fades. That over-delivers: the preference exists for
+  vestibular discomfort, which is caused by things travelling across the screen,
+  not by a tint easing in. Cutting the fades too is a real loss for this app,
+  because state here is often carried by a tint change (chip selection, status
+  banners, the focus halo) and an instant swap makes those changes easy to miss
+  — the users most likely to set this preference are the ones least served by
+  removing the only cue that something changed.
+
+  So the global override now restricts the *property list* rather than the
+  duration: anything that moves or scales stops transitioning, everything flat
+  keeps its normal short fade. Transform-based rest states are then neutralised
+  individually below, so nothing is left mid-slide.
+
+  Only the property list is forced, never the duration — an element that
+  declared no transition has a 0s duration and must keep it, or this rule would
+  hand a 140ms fade to every element in the app that never asked for one.
 */
 @media (prefers-reduced-motion: reduce) {
   :where(*) {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+    transition-property:
+      opacity, color, background-color, border-color, box-shadow, fill, stroke !important;
   }
 
   .pressable:active:not(:disabled) {
     transform: none;
   }
 
+  /* The sheet's discrete `display` / `overlay` transitions fall outside the
+     property list above, so the dialog now appears and disappears instantly
+     rather than sliding. That is the intended result here, not a side effect:
+     a full-viewport-height slide is exactly the travel this preference asks us
+     to drop. The backdrop tint still fades. */
   .sheet-panel {
     transform: none;
   }

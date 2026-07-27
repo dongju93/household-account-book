@@ -7,12 +7,14 @@ import { cn } from '../lib/cn'
   Form controls (§Phase 1).
 
   `min-h-11` is the §8 touch target, `rounded-control` is the §4.3 control step,
-  and the subdued focus boundary comes from the global :focus-visible rule in
-  index.css. Focus no longer adds a separate outer ring as well, which previously
-  made one interaction state look like a nested double outline.
+  and the focus treatment comes from the global :focus-visible rule in index.css
+  — an `ink` border plus a soft halo, which is what distinguishes it from hover
+  (a border darkening alone). No `transition-*` utility here: the halo is a
+  box-shadow, which `transition-colors` does not animate, so index.css owns the
+  transition for the border and the ring together.
 */
 export const inputClassName =
-  'text-body min-h-11 w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink outline-none transition-colors duration-(--dur-state) placeholder:text-ink3 hover:border-ink3 disabled:cursor-not-allowed disabled:opacity-50'
+  'text-body min-h-11 w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink outline-none placeholder:text-ink3 hover:border-ink3 disabled:cursor-not-allowed disabled:opacity-50'
 
 type FieldControlProps = {
   'aria-invalid'?: boolean
@@ -120,7 +122,7 @@ export function PasswordInput({ className, ...rest }: InputHTMLAttributes<HTMLIn
   return (
     <div
       className={cn(
-        'focus-ring flex min-h-11 items-stretch rounded-control border border-line bg-paper transition-colors duration-(--dur-state) hover:border-ink3',
+        'focus-ring flex min-h-11 items-stretch rounded-control border border-line bg-paper hover:border-ink3',
         className,
       )}
     >
@@ -179,7 +181,7 @@ export function AmountInput({
   return (
     <div
       className={cn(
-        'focus-ring flex items-baseline gap-2 border border-line bg-paper transition-colors duration-(--dur-state) hover:border-ink3',
+        'focus-ring flex items-baseline gap-2 border border-line bg-paper hover:border-ink3',
         hero ? 'rounded-hero px-4 py-3.5' : 'min-h-11 rounded-control px-3 py-2.5',
       )}
     >

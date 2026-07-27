@@ -118,8 +118,13 @@ export function Chip({
       // aria-pressed, not colour alone, is what tells a screen reader the filter
       // is on (§8: state must never be carried by colour only).
       aria-pressed={active}
+      // 36px visual, 44px target via `hit-tall`. A chip is a label, not a
+      // button — at 44px tall with 12px text it was mostly empty padding, and
+      // the two screens that use chips heavily (the 구분 filter row, the
+      // category picker in the sheet) both wrap to multiple lines, so the
+      // wasted height multiplied. Reach is unchanged; only the ink shrinks.
       className={cn(
-        'pressable text-caption inline-flex min-h-11 items-center gap-1 rounded-full border px-3.5 font-semibold whitespace-nowrap',
+        'pressable hit-tall text-caption inline-flex h-9 items-center gap-1 rounded-full border px-3.5 font-semibold whitespace-nowrap',
         active
           ? 'border-ink bg-ink text-paper'
           : 'border-line bg-paper text-ink2 hover:border-ink3 hover:text-ink',
@@ -205,9 +210,18 @@ export function Toggle({
         disabled && 'cursor-not-allowed opacity-40',
       )}
     >
+      {/*
+        The one place in the app that earns an overshoot. A toggle is a discrete
+        two-position control whose whole job is to feel *switched*, and at 140ms
+        on a decelerating curve the knob crept to a stop — closer to a slider
+        settling than a switch flipping. 200ms with ~4% of overshoot is short
+        enough to stay inside the §7.2 state band while giving the travel an
+        end-stop. The distance (16px) is small enough that the overshoot never
+        reads as bounce, only as snap.
+      */}
       <span
         className={cn(
-          'absolute top-0.5 left-0.5 h-[18px] w-[18px] rounded-full bg-paper shadow-raised transition-transform duration-(--dur-state) ease-(--ease-emphasized)',
+          'absolute top-0.5 left-0.5 h-[18px] w-[18px] rounded-full bg-paper shadow-raised transition-transform duration-200 ease-(--ease-snap)',
           on && 'translate-x-4',
         )}
       />
@@ -233,12 +247,23 @@ export function Progress({
   const clamped = Math.min(100, Math.max(0, pct))
   return (
     <div aria-hidden className="w-full overflow-hidden rounded-full bg-fill2" style={{ height }}>
+      {/*
+        Slid, not squashed. `border-radius` resolves before `transform`, so the
+        previous `scaleX()` deformed the fill's own pill: at 30% on a 6px bar the
+        3px round cap became a 0.9px-wide lens, and on the 4px 자금 흐름 cells a
+        low percentage rendered as a pinched sliver rather than a rounded tip.
+
+        Translating a permanently full-width pill leftward inside the clipping
+        track gives the leading cap its true radius at every value, while staying
+        a compositor-only transform — no layout, unlike animating `width`. The
+        trailing edge is clipped by the track, which is round anyway.
+      */}
       <div
         className={cn(
-          'h-full w-full origin-left rounded-full transition-transform duration-(--dur-progress) ease-(--ease-emphasized)',
+          'h-full w-full rounded-full transition-transform duration-(--dur-progress) ease-(--ease-emphasized)',
           toneBg[tone],
         )}
-        style={{ transform: `scaleX(${clamped / 100})` }}
+        style={{ transform: `translateX(${clamped - 100}%)` }}
       />
     </div>
   )
@@ -261,7 +286,11 @@ export function Button({
     <button
       type={type}
       className={cn(
-        'pressable text-body min-h-12 w-full rounded-surface px-4 font-bold disabled:cursor-not-allowed disabled:opacity-50',
+        // Full-width buttons are the largest pressable surface in the app, so
+        // they need the *smallest* factor. Edge travel is size × (1 − scale) / 2:
+        // at the 0.97 default a 448px button moved 6.7px per edge, which reads as
+        // the button wobbling rather than depressing. 0.985 brings it to ~3.4px.
+        'pressable [--press-scale:0.985] text-body min-h-12 w-full rounded-surface px-4 font-bold disabled:cursor-not-allowed disabled:opacity-50',
         variant === 'primary' && 'bg-ink text-paper enabled:hover:bg-ink/90',
         variant === 'ghost' && 'border border-line bg-fill1 text-ink2 enabled:hover:text-ink',
         variant === 'danger' && 'bg-status-danger text-paper enabled:hover:bg-status-danger/90',
@@ -302,7 +331,11 @@ export function IconButton({
       type={type}
       aria-label={label}
       className={cn(
-        'pressable flex items-center justify-center rounded-full text-ink2',
+        // The opposite end of the same problem: on a 32px control the 0.97
+        // default moves each edge 0.5px, so the month arrows and the sheet close
+        // button gave no press feedback at all on touch, where there is no hover
+        // state to fall back on. 0.9 restores a visible ~1.6px push.
+        'pressable [--press-scale:0.9] flex items-center justify-center rounded-full text-ink2',
         expandHitArea && 'hit-44 h-8 w-8',
         'enabled:hover:bg-fill1 enabled:hover:text-ink disabled:opacity-30',
         className,

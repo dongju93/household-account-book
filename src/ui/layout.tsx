@@ -208,11 +208,19 @@ export function TabBar({ onAdd }: { onAdd: () => void }) {
           onClick={onAdd}
           // §6.2: keep the position and function, drop the heavy drop shadow to
           // the `raised` step, and add the shared press feedback.
-          className="pressable -mt-5 flex h-12 w-12 items-center justify-center rounded-full bg-ink text-paper shadow-raised hover:bg-ink/90"
+          //
+          // 52px rather than 48px. This is the only always-visible action in the
+          // app and the entry point to its primary task, yet at 48px it read as
+          // *smaller* than the 56px tab rows it floats above — the visual weight
+          // contradicted the hierarchy. 52px still leaves a 6px gutter to its
+          // neighbours in the narrowest supported slot (320px ÷ 5 = 64px), so
+          // nothing crowds. The glyph grows with it to keep the ring of padding
+          // around it constant.
+          className="pressable [--press-scale:0.9] -mt-5 flex h-13 w-13 items-center justify-center rounded-full bg-ink text-paper shadow-raised hover:bg-ink/90"
         >
           <svg
-            width="20"
-            height="20"
+            width="22"
+            height="22"
             viewBox="0 0 20 20"
             fill="none"
             stroke="currentColor"
