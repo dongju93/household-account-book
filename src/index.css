@@ -222,7 +222,15 @@ body {
 }
 
 /*
-  BottomSheet slide-up enter/exit transition.
+  BottomSheet overlay + slide-up enter/exit transition.
+
+  The <dialog> is the overlay, not the sheet: it covers the *visible* viewport
+  (custom properties written by BottomSheet.tsx from `visualViewport`) and
+  bottom-aligns `.sheet-panel` inside it. iOS Safari's layout viewport — the one
+  `bottom: 0` resolves against — runs behind the browser toolbar and ignores the
+  virtual keyboard, so a bottom-anchored sheet ends up partly or entirely
+  off-screen there. Aligning inside a viewport-sized overlay removes the offset
+  arithmetic entirely; the fallbacks apply where visualViewport is unavailable.
 
   Animating a top-layer <dialog> requires three modern features working together:
   - `@starting-style` defines the "enter-from" values (you cannot transition out
@@ -244,23 +252,44 @@ body {
   `none` end state its exit animation needs.
 */
 .bottom-sheet {
-  bottom: var(--bottom-sheet-bottom, 0px);
+  top: var(--sheet-viewport-top, 0px);
+  left: var(--sheet-viewport-left, 0px);
+  width: var(--sheet-viewport-width, 100%);
+  height: var(--sheet-viewport-height, 100dvh);
+  max-height: none;
   display: none;
-  max-height: min(85dvh, var(--bottom-sheet-max-height, 85dvh));
-  translate: 0 100%;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+  overscroll-behavior: contain;
   transition:
-    translate var(--dur-panel) var(--ease-drawer),
     overlay var(--dur-panel) var(--ease-drawer) allow-discrete,
     display var(--dur-panel) var(--ease-drawer) allow-discrete;
 }
 
 .bottom-sheet[open] {
   display: flex;
+}
+
+/* The sheet itself. Its max-height is measured against the overlay, i.e. against
+   the *visible* viewport, so the save button stays reachable (by scrolling the
+   body) when the keyboard shrinks it. The 2rem reserve keeps a strip of backdrop
+   tappable for light dismiss — the role 85dvh played before, but as a fixed
+   inset so a keyboard-shrunk viewport gives the form the rest of the space. */
+.sheet-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100% - 2rem);
+  translate: 0 100%;
+  transition: translate var(--dur-panel) var(--ease-drawer);
+}
+
+.bottom-sheet[open] .sheet-panel {
   translate: 0 0;
 }
 
 @starting-style {
-  .bottom-sheet[open] {
+  .bottom-sheet[open] .sheet-panel {
     translate: 0 100%;
   }
 }
@@ -300,12 +329,12 @@ body {
     transform: none;
   }
 
-  .bottom-sheet {
+  .sheet-panel {
     translate: 0 0;
   }
 
   @starting-style {
-    .bottom-sheet[open] {
+    .bottom-sheet[open] .sheet-panel {
       translate: 0 0;
     }
   }
