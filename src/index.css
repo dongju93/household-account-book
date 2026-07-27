@@ -120,7 +120,8 @@
 
 :root {
   --dur-state: 140ms;
-  --dur-panel: 200ms;
+  --dur-panel: 240ms;
+  --dur-progress: 240ms;
 }
 
 html,
@@ -147,19 +148,31 @@ body {
 }
 
 /*
-  §8: one focus-visible treatment for every keyboard-operable element. Written
-  with :where() so its specificity is 0 — a component can still opt out or
-  recolor without an !important arms race, but it never has to opt *in*.
+  Keep keyboard focus discoverable without turning it into the strongest visual
+  state on the screen. Buttons and links keep an outside indicator because their
+  shape does not otherwise change. Form fields use one inset boundary below, so
+  focusing a text input never creates the former nested double outline.
 */
-:where(a, button, input, select, textarea, summary, [role='switch'], [tabindex]):focus-visible {
-  outline: 2px solid var(--color-ink);
-  outline-offset: 2px;
+:where(a, button, summary, [role='switch'], [tabindex]):focus-visible {
+  outline: 2px solid var(--color-ink2);
+  outline-offset: 1px;
 }
 
-/* Same treatment for composite controls that render focus on a child input. */
+/*
+  Text-entry controls commonly match :focus-visible even after a pointer click.
+  Reinforcing their existing boundary inward keeps focus visible at 3:1+ without
+  surrounding the whole field with an attention-grabbing outer ring.
+*/
+:where(input, select, textarea):focus-visible {
+  outline: none;
+  border-color: var(--color-ink3);
+  box-shadow: inset 0 0 0 1px var(--color-ink3);
+}
+
+/* Composite controls render the same single boundary on their wrapper. */
 :where(.focus-ring):has(:focus-visible) {
-  outline: 2px solid var(--color-ink);
-  outline-offset: 2px;
+  border-color: var(--color-ink3);
+  box-shadow: inset 0 0 0 1px var(--color-ink3);
 }
 
 /* A composite owns the visible ring; do not draw a second square around its
@@ -280,35 +293,36 @@ body {
   display: flex;
   flex-direction: column;
   max-height: calc(100% - 2rem);
-  translate: 0 100%;
-  transition: translate var(--dur-panel) var(--ease-drawer);
+  transform: translate3d(0, 100%, 0);
+  transition: transform var(--dur-panel) var(--ease-drawer);
 }
 
 .bottom-sheet[open] .sheet-panel {
-  translate: 0 0;
+  transform: translate3d(0, 0, 0);
 }
 
 @starting-style {
   .bottom-sheet[open] .sheet-panel {
-    translate: 0 100%;
+    transform: translate3d(0, 100%, 0);
   }
 }
 
 .bottom-sheet::backdrop {
-  background: transparent;
+  background: color-mix(in srgb, var(--color-ink) 32%, transparent);
+  opacity: 0;
   transition:
-    background var(--dur-panel) var(--ease-drawer),
+    opacity var(--dur-panel) var(--ease-drawer),
     overlay var(--dur-panel) var(--ease-drawer) allow-discrete,
     display var(--dur-panel) var(--ease-drawer) allow-discrete;
 }
 
 .bottom-sheet[open]::backdrop {
-  background: color-mix(in srgb, var(--color-ink) 32%, transparent);
+  opacity: 1;
 }
 
 @starting-style {
   .bottom-sheet[open]::backdrop {
-    background: transparent;
+    opacity: 0;
   }
 }
 
@@ -330,12 +344,12 @@ body {
   }
 
   .sheet-panel {
-    translate: 0 0;
+    transform: none;
   }
 
   @starting-style {
     .bottom-sheet[open] .sheet-panel {
-      translate: 0 0;
+      transform: none;
     }
   }
 }

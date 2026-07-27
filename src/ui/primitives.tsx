@@ -207,8 +207,8 @@ export function Toggle({
     >
       <span
         className={cn(
-          'absolute top-0.5 h-[18px] w-[18px] rounded-full bg-paper shadow-raised transition-[left] duration-(--dur-state) ease-(--ease-emphasized)',
-          on ? 'left-[18px]' : 'left-0.5',
+          'absolute top-0.5 left-0.5 h-[18px] w-[18px] rounded-full bg-paper shadow-raised transition-transform duration-(--dur-state) ease-(--ease-emphasized)',
+          on && 'translate-x-4',
         )}
       />
     </button>
@@ -233,7 +233,13 @@ export function Progress({
   const clamped = Math.min(100, Math.max(0, pct))
   return (
     <div aria-hidden className="w-full overflow-hidden rounded-full bg-fill2" style={{ height }}>
-      <div className={cn('h-full rounded-full', toneBg[tone])} style={{ width: `${clamped}%` }} />
+      <div
+        className={cn(
+          'h-full w-full origin-left rounded-full transition-transform duration-(--dur-progress) ease-(--ease-emphasized)',
+          toneBg[tone],
+        )}
+        style={{ transform: `scaleX(${clamped / 100})` }}
+      />
     </div>
   )
 }

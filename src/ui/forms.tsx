@@ -7,11 +7,12 @@ import { cn } from '../lib/cn'
   Form controls (§Phase 1).
 
   `min-h-11` is the §8 touch target, `rounded-control` is the §4.3 control step,
-  and the focus ring comes from the global :focus-visible rule in index.css so
-  every input, select and composite field is outlined the same way.
+  and the subdued focus boundary comes from the global :focus-visible rule in
+  index.css. Focus no longer adds a separate outer ring as well, which previously
+  made one interaction state look like a nested double outline.
 */
 export const inputClassName =
-  'text-body min-h-11 w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink outline-none transition-colors duration-(--dur-state) placeholder:text-ink3 hover:border-ink3 focus:border-ink disabled:cursor-not-allowed disabled:opacity-50'
+  'text-body min-h-11 w-full rounded-control border border-line bg-paper px-3 py-2.5 text-ink outline-none transition-colors duration-(--dur-state) placeholder:text-ink3 hover:border-ink3 disabled:cursor-not-allowed disabled:opacity-50'
 
 type FieldControlProps = {
   'aria-invalid'?: boolean
@@ -111,15 +112,15 @@ function EyeIcon({ off }: { off: boolean }) {
 // Password field with an unmask toggle. The toggle is type="button" so it never
 // submits the form; aria-pressed + a dynamic aria-label expose its state, and a
 // visually-hidden warning tells assistive-tech users that revealing prints the
-// password on screen. `focus-ring` puts the §8 outline on the whole composite
-// when either child takes keyboard focus. All other input props pass through.
+// password on screen. `focus-ring` puts the §8 focus boundary on the whole
+// composite when either child takes focus. All other input props pass through.
 export function PasswordInput({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
   const [revealed, setRevealed] = useState(false)
   const warningId = useId()
   return (
     <div
       className={cn(
-        'focus-ring flex min-h-11 items-stretch rounded-control border border-line bg-paper transition-colors duration-(--dur-state) hover:border-ink3 focus-within:border-ink',
+        'focus-ring flex min-h-11 items-stretch rounded-control border border-line bg-paper transition-colors duration-(--dur-state) hover:border-ink3',
         className,
       )}
     >
@@ -178,7 +179,7 @@ export function AmountInput({
   return (
     <div
       className={cn(
-        'focus-ring flex items-baseline gap-2 border border-line bg-paper transition-colors duration-(--dur-state) hover:border-ink3 focus-within:border-ink',
+        'focus-ring flex items-baseline gap-2 border border-line bg-paper transition-colors duration-(--dur-state) hover:border-ink3',
         hero ? 'rounded-hero px-4 py-3.5' : 'min-h-11 rounded-control px-3 py-2.5',
       )}
     >
