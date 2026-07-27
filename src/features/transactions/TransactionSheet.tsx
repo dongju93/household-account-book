@@ -162,14 +162,19 @@ export function TransactionSheet({
             </p>
           ) : (
             <div
-              className="flex flex-wrap gap-2"
+              className="flex flex-wrap gap-x-1.5 gap-y-3"
               role="group"
               aria-label="카테고리"
               aria-invalid={errors.categoryId ? true : undefined}
               aria-describedby={errors.categoryId ? categoryErrorId : undefined}
             >
               {typeCategories.map((c) => (
-                <Chip key={c.id} active={c.id === categoryId} onClick={() => setCategoryId(c.id)}>
+                <Chip
+                  key={c.id}
+                  active={c.id === categoryId}
+                  density="compact"
+                  onClick={() => setCategoryId(c.id)}
+                >
                   {c.name}
                 </Chip>
               ))}
@@ -178,8 +183,8 @@ export function TransactionSheet({
           {errors.categoryId && <FieldError id={categoryErrorId}>{errors.categoryId}</FieldError>}
         </div>
 
-        <div className="flex gap-3">
-          <label className="flex flex-1 flex-col gap-1.5">
+        <div className="grid grid-cols-1 gap-2.5 min-[360px]:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <label className="flex min-w-0 flex-col gap-1.5">
             <span className="text-caption font-semibold text-ink2">날짜</span>
             <TextInput
               type="date"
@@ -187,12 +192,17 @@ export function TransactionSheet({
               onChange={(e) => setDate(e.target.value)}
               aria-invalid={errors.date ? true : undefined}
               aria-describedby={errors.date ? dateErrorId : undefined}
-              className="tnum"
+              className="tnum min-w-0 max-w-full"
             />
           </label>
-          <label className="flex flex-[1.2] flex-col gap-1.5">
+          <label className="flex min-w-0 flex-col gap-1.5">
             <span className="text-caption font-semibold text-ink2">메모</span>
-            <TextInput value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="메모" />
+            <TextInput
+              value={memo}
+              onChange={(e) => setMemo(e.target.value)}
+              placeholder="메모"
+              className="min-w-0 max-w-full"
+            />
           </label>
         </div>
         {errors.date && <FieldError id={dateErrorId}>{errors.date}</FieldError>}

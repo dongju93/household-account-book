@@ -156,21 +156,12 @@
   --dur-press-in: 90ms;
   --dur-press-out: 200ms;
 
-  /* Sheets travel a full panel height, so they sit at the top of the §7.2 panel
-     band. Out is faster than in: dismissing should feel like the sheet getting
-     out of the way, not like watching the entrance in reverse.
-
-     Duration is bound to `--ease-drawer` and cannot be tuned apart from it. With
-     the old front-loaded curve both ends were wrong for the same reason: at
-     300ms its fast section resolved in ~80ms and the sheet snapped ("파박"), and
-     stretching to 440ms only lengthened the flat tail into a 300ms hang, which
-     reads as a spring ("띠용"). Now that the curve decelerates evenly, duration
-     controls what it should — plain speed — so this pair is the one knob worth
-     turning by feel. 440ms in reads as a deliberate glide; the exit stays
-     noticeably shorter because dismissing should feel like the sheet getting out
-     of the way, not like the entrance played backwards. */
-  --dur-sheet-in: 440ms;
-  --dur-sheet-out: 300ms;
+  /* The transaction sheet is a high-frequency action, so its entrance is a
+     short settle rather than a full-panel journey. It moves only 16px (see
+     `.sheet-panel`) and finishes before the motion becomes the interaction.
+     Exit remains slightly faster so dismissal gets out of the user's way. */
+  --dur-sheet-in: 220ms;
+  --dur-sheet-out: 180ms;
 
   /* Small panel affordances (the 월 마감 caret). Unchanged. */
   --dur-panel: 240ms;
@@ -453,13 +444,16 @@ body {
   display: flex;
   flex-direction: column;
   max-height: min(calc(100% - 1.5rem), max(calc(100% - 5rem), 22rem));
-  transform: translate3d(0, 100%, 0);
-  transition: transform var(--dur-sheet-out) var(--ease-drawer);
+  opacity: 0;
+  transform: translate3d(0, 1rem, 0);
+  transition:
+    transform var(--dur-sheet-out) var(--ease-drawer),
+    opacity var(--dur-sheet-out) ease;
 }
 
 /* Drag-to-dismiss: while a finger owns the sheet there must be no transition at
    all, on the panel or on the backdrop dim, or every pointermove would start a
-   new 440ms animation toward the finger and the sheet would visibly lag behind
+   new entrance animation toward the finger and the sheet would visibly lag behind
    the thumb. Direct manipulation has to be frame-exact — the animation belongs
    to the release, not to the drag. `data-dragging` lives on the dialog because
    the backdrop is its pseudo-element and cannot be reached from the panel.
@@ -471,13 +465,15 @@ body {
 }
 
 .bottom-sheet[open] .sheet-panel {
+  opacity: 1;
   transform: translate3d(0, 0, 0);
   transition-duration: var(--dur-sheet-in);
 }
 
 @starting-style {
   .bottom-sheet[open] .sheet-panel {
-    transform: translate3d(0, 100%, 0);
+    opacity: 0;
+    transform: translate3d(0, 1rem, 0);
   }
 }
 

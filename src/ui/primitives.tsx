@@ -105,11 +105,14 @@ export function Chip({
   active,
   onClick,
   className,
+  density = 'default',
 }: {
   children: ReactNode
   active?: boolean
   onClick?: () => void
   className?: string
+  /** Compact keeps the 44px hit area while reducing the visible pill. */
+  density?: 'default' | 'compact'
 }) {
   return (
     <button
@@ -118,13 +121,12 @@ export function Chip({
       // aria-pressed, not colour alone, is what tells a screen reader the filter
       // is on (§8: state must never be carried by colour only).
       aria-pressed={active}
-      // 36px visual, 44px target via `hit-tall`. A chip is a label, not a
-      // button — at 44px tall with 12px text it was mostly empty padding, and
-      // the two screens that use chips heavily (the 구분 filter row, the
-      // category picker in the sheet) both wrap to multiple lines, so the
-      // wasted height multiplied. Reach is unchanged; only the ink shrinks.
+      // 36px visual by default, 32px in dense pickers, and always a 44px target
+      // via `hit-tall`. A chip is a label, not a full-sized action button; the
+      // visual pill can stay quiet without sacrificing reach.
       className={cn(
-        'pressable hit-tall text-caption inline-flex h-9 items-center gap-1 rounded-full border px-3.5 font-semibold whitespace-nowrap',
+        'pressable hit-tall text-caption inline-flex items-center gap-1 rounded-full border font-semibold whitespace-nowrap',
+        density === 'compact' ? 'h-8 px-3' : 'h-9 px-3.5',
         active
           ? 'border-ink bg-ink text-paper'
           : 'border-line bg-paper text-ink2 hover:border-ink3 hover:text-ink',

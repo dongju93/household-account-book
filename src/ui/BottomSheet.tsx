@@ -1,5 +1,5 @@
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef } from 'react'
 
 /**
  * Release thresholds for the drag gesture.
@@ -101,9 +101,35 @@ export function BottomSheet({
     onGrabber: boolean
   } | null>(null)
 
-  useEffect(() => {
+  /*
+   * Resolve the visible viewport before showModal() paints the dialog.
+   *
+   * On iOS Safari, opening the sheet can also move the browser chrome. When the
+   * dialog was shown first and visualViewport coordinates arrived in a later
+   * effect, one frame used the layout viewport and the next used the visible
+   * viewport. The bottom-aligned panel visibly jumped past its resting position
+   * and then dropped back. A layout effect keeps that coordinate-space switch
+   * out of the painted frames.
+   */
+  useLayoutEffect(() => {
     const dialog = dialogRef.current
     if (!dialog) return
+
+    const viewport = window.visualViewport
+    const syncVisibleViewport = () => {
+      if (!viewport) return
+      dialog.style.setProperty('--sheet-viewport-top', `${viewport.offsetTop}px`)
+      dialog.style.setProperty('--sheet-viewport-left', `${viewport.offsetLeft}px`)
+      dialog.style.setProperty('--sheet-viewport-width', `${viewport.width}px`)
+      dialog.style.setProperty('--sheet-viewport-height', `${viewport.height}px`)
+    }
+
+    if (open) {
+      syncVisibleViewport()
+      viewport?.addEventListener('resize', syncVisibleViewport)
+      viewport?.addEventListener('scroll', syncVisibleViewport)
+    }
+
     if (open && !dialog.open) {
       dialog.showModal()
       // showModal() lands on the first tabbable node, which is the close button —
@@ -119,6 +145,15 @@ export function BottomSheet({
       else titleRef.current?.focus()
     }
     if (!open && dialog.open) dialog.close()
+
+    return () => {
+      viewport?.removeEventListener('resize', syncVisibleViewport)
+      viewport?.removeEventListener('scroll', syncVisibleViewport)
+      dialog.style.removeProperty('--sheet-viewport-top')
+      dialog.style.removeProperty('--sheet-viewport-left')
+      dialog.style.removeProperty('--sheet-viewport-width')
+      dialog.style.removeProperty('--sheet-viewport-height')
+    }
   }, [open])
 
   // A closed sheet must own none of the gesture's leftovers: an inline transform
@@ -241,37 +276,6 @@ export function BottomSheet({
     dragRef.current = null
     resetPanelStyles()
   }
-
-  // Pin the overlay to the visible viewport. `offsetTop`/`offsetLeft` are the
-  // visual viewport's position *inside* the layout viewport, which is the
-  // coordinate space a fixed element uses — so assigning them directly maps the
-  // overlay onto the visible rect. Without visualViewport support the CSS
-  // fallbacks (`0`, `100%`, `100dvh`) keep the previous behaviour.
-  useEffect(() => {
-    const dialog = dialogRef.current
-    const viewport = window.visualViewport
-    if (!open || !dialog || !viewport) return
-
-    const syncVisibleViewport = () => {
-      dialog.style.setProperty('--sheet-viewport-top', `${viewport.offsetTop}px`)
-      dialog.style.setProperty('--sheet-viewport-left', `${viewport.offsetLeft}px`)
-      dialog.style.setProperty('--sheet-viewport-width', `${viewport.width}px`)
-      dialog.style.setProperty('--sheet-viewport-height', `${viewport.height}px`)
-    }
-
-    syncVisibleViewport()
-    viewport.addEventListener('resize', syncVisibleViewport)
-    viewport.addEventListener('scroll', syncVisibleViewport)
-
-    return () => {
-      viewport.removeEventListener('resize', syncVisibleViewport)
-      viewport.removeEventListener('scroll', syncVisibleViewport)
-      dialog.style.removeProperty('--sheet-viewport-top')
-      dialog.style.removeProperty('--sheet-viewport-left')
-      dialog.style.removeProperty('--sheet-viewport-width')
-      dialog.style.removeProperty('--sheet-viewport-height')
-    }
-  }, [open])
 
   return (
     <dialog
