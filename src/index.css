@@ -162,6 +162,12 @@ body {
   outline-offset: 2px;
 }
 
+/* A composite owns the visible ring; do not draw a second square around its
+   borderless child input/button. Keyboard focus remains visible on the wrapper. */
+:where(.focus-ring > input, .focus-ring > button):focus-visible {
+  outline: none;
+}
+
 /*
   Shared interaction behaviour for pressable controls (§2.2 P0: focus and press
   feedback used to differ per component). Applying one class gives a control the
@@ -238,7 +244,9 @@ body {
   `none` end state its exit animation needs.
 */
 .bottom-sheet {
+  bottom: var(--bottom-sheet-bottom, 0px);
   display: none;
+  max-height: min(85dvh, var(--bottom-sheet-max-height, 85dvh));
   translate: 0 100%;
   transition:
     translate var(--dur-panel) var(--ease-drawer),

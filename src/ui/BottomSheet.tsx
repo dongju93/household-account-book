@@ -11,11 +11,11 @@ import { useEffect, useId, useRef } from 'react'
  * Redesign notes (docs/5. frontend-redesign-plan.md):
  * - §4.3 — 18px `hero` radius; the sheet is a top-level surface, not a card.
  * - §5    — the pad under the actions clears the home indicator via
- *           `pb-safe-sheet`, and the body caps at 85dvh so a long category list
- *           scrolls inside the sheet instead of pushing the save button off
- *           screen when the virtual keyboard opens.
- * - §8    — opening moves focus to the title unless the content declares its own
- *           `autofocus` target (the transaction sheet focuses the amount field).
+ *           `pb-safe-sheet`, and the body caps at the visible viewport so a long
+ *           category list scrolls inside the sheet instead of staying behind the
+ *           virtual keyboard.
+ * - §8    — opening moves focus to the title unless a fine-pointer device has a
+ *           declared `autofocus` target (the transaction sheet's amount field).
  *
  * The element deliberately carries no `flex` utility: `display` is owned by the
  * `.bottom-sheet` rules in index.css so the closed sheet stays `display: none`
@@ -48,10 +48,32 @@ export function BottomSheet({
       // imperatively without leaving an attribute behind, so it cannot be
       // detected here — the marker has to be explicit.
       const target = dialog.querySelector<HTMLElement>('[data-autofocus]')
-      if (target) target.focus()
+      const canFocusInputOnOpen =
+        window.matchMedia?.('(hover: hover) and (pointer: fine)').matches ?? true
+      if (target && canFocusInputOnOpen) target.focus()
       else titleRef.current?.focus()
     }
     if (!open && dialog.open) dialog.close()
+
+    if (!open || !window.visualViewport) return
+
+    const viewport = window.visualViewport
+    const syncVisibleViewport = () => {
+      const obscuredBottom = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+      dialog.style.setProperty('--bottom-sheet-bottom', `${obscuredBottom}px`)
+      dialog.style.setProperty('--bottom-sheet-max-height', `${viewport.height * 0.85}px`)
+    }
+
+    syncVisibleViewport()
+    viewport.addEventListener('resize', syncVisibleViewport)
+    viewport.addEventListener('scroll', syncVisibleViewport)
+
+    return () => {
+      viewport.removeEventListener('resize', syncVisibleViewport)
+      viewport.removeEventListener('scroll', syncVisibleViewport)
+      dialog.style.removeProperty('--bottom-sheet-bottom')
+      dialog.style.removeProperty('--bottom-sheet-max-height')
+    }
   }, [open])
 
   return (
@@ -63,7 +85,7 @@ export function BottomSheet({
       onClick={(e) => {
         if (e.target === dialogRef.current) onClose()
       }}
-      className="bottom-sheet fixed inset-x-0 top-auto bottom-0 z-(--z-sheet) mx-auto m-0 max-h-[85dvh] w-full max-w-[480px] flex-col rounded-t-hero border-0 bg-paper shadow-sheet"
+      className="bottom-sheet fixed inset-x-0 top-auto z-(--z-sheet) mx-auto m-0 w-full max-w-[480px] flex-col rounded-t-hero border-0 bg-paper shadow-sheet"
     >
       <div className="flex-none px-4 pt-3">
         <div aria-hidden className="mx-auto mb-3 h-1 w-9 rounded-full bg-fill3" />
