@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { invokeAiFeature, isAiClientError } from '../../ai/client'
 import { dataVersionHash, stableStringify } from '../../ai/hash'
@@ -72,18 +72,31 @@ export function MonthCloseSection({ ledgerId, ym }: { ledgerId: string; ym: Year
   // Ready gate: the narrative effect keys on the resolved review, so it can
   // never fire while the loader is pending or failed (`review` still null).
   const reviewKey = review ? stableStringify(buildMonthCloseNarrativeInput(review)) : null
+  const narrativeKey = shouldLoad ? reviewKey : null
+  const narrativeGeneration = useRef(0)
+  useEffect(() => {
+    narrativeGeneration.current += 1
+    return () => {
+      narrativeGeneration.current += 1
+    }
+  }, [narrativeKey])
+
   const {
     data: narrative,
     loading: narrativeLoading,
     reload: regenerate,
   } = useAsyncData<NarrativeState>(async () => {
-    if (!review || findingsCount === 0) return { kind: 'idle' }
+    if (!review || findingsCount === 0 || !narrativeKey) return { kind: 'idle' }
+    const generation = narrativeGeneration.current
     try {
       const input = buildMonthCloseNarrativeInput(review)
       const hash = await dataVersionHash({
         promptRev: MONTH_CLOSE_NARRATIVE_PROMPT_REV,
         input,
       })
+      // Hashing is asynchronous. If the user collapsed/navigated away or a new
+      // review replaced this one while it ran, do not spend quota on stale work.
+      if (generation !== narrativeGeneration.current) return { kind: 'idle' }
       const res = await invokeAiFeature<MonthCloseNarrativeResult>({
         feature: 'month_close_narrative',
         ledgerId,
@@ -106,8 +119,8 @@ export function MonthCloseSection({ ledgerId, ym }: { ledgerId: string; ym: Year
         message: isAiClientError(err) ? err.message : describeError(err).message,
       }
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- reviewKey stands in for review
-  }, [ledgerId, reviewKey])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- narrativeKey stands in for review
+  }, [ledgerId, narrativeKey])
 
   if (!enabled || !isPastMonth) return null
 
