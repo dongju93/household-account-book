@@ -35,6 +35,7 @@ const INPUT: MonthInsightInput = {
     totalInvestment: 0,
     balance: 1_300_000,
   },
+  totalExpenseBudget: 1_500_000,
   achievements: [],
   topExpenses: [{ name: '식비', amount: 400_000, pct: 33 }],
 }

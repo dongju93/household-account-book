@@ -11,6 +11,7 @@ const input = {
     totalInvestment: 0,
     balance: 200_000,
   },
+  totalExpenseBudget: 2_400_000,
   achievements: [
     {
       name: '쇼핑',
@@ -18,8 +19,6 @@ const input = {
       target: 200_000,
       actual: 503_855,
       status: '초과',
-      plannedExpenseSharePct: 8,
-      actualExpenseSharePct: 20,
     },
     {
       name: '비상금',
@@ -27,23 +26,23 @@ const input = {
       target: 500_000,
       actual: 300_000,
       status: '진행중',
-      plannedExpenseSharePct: null,
-      actualExpenseSharePct: null,
     },
   ],
   topExpenses: [{ name: '쇼핑', amount: 503_855, pct: 20 }],
 }
 
 describe('monthInsightPrompt', () => {
-  it('presents precomputed differences and budget-vs-actual spending shares', () => {
+  it('presents server-computed differences without derived share metrics', () => {
     const prompt = buildFeaturePrompt('month_insight', input)
     const match = prompt.user.match(/<monthly_data>\n(.+)\n<\/monthly_data>/)
 
     expect(match).not.toBeNull()
     const data = JSON.parse(match![1]) as {
+      요약: Record<string, unknown>
       예산목표: Record<string, unknown>[]
     }
 
+    expect(data.요약).toMatchObject({ 지출예산합계: { 표시: '₩2,400,000', 값: 2_400_000 } })
     expect(data.예산목표[0]).toMatchObject({
       목표: '₩200,000',
       실적: '₩503,855',
@@ -51,32 +50,57 @@ describe('monthInsightPrompt', () => {
       초과분값: 303_855,
       '목표 내 잔여액': '₩0',
       '목표 내 잔여액 값': 0,
-      예산상지출비중퍼센트: 8,
-      실제지출비중퍼센트: 20,
-      비중차이퍼센트포인트: 12,
     })
+    // Plan-vs-actual share is gone from the achievement rows; the 상위지출
+    // composition figure stays because it mirrors the dashboard's own pie chart.
+    expect(JSON.stringify(data.예산목표)).not.toContain('비중')
     expect(data.예산목표[1]).toMatchObject({
       '목표까지 잔여액': '₩200,000',
       '목표까지 잔여액 값': 200_000,
     })
   })
 
-  it('forbids the reported failure mode and allows fewer non-filler bullets', () => {
+  it('marks an in-progress month with elapsed days, and omits it once closed', () => {
+    const dataOf = (prompt: { user: string }) =>
+      JSON.parse(prompt.user.match(/<monthly_data>\n(.+)\n<\/monthly_data>/)![1]) as {
+        진행?: Record<string, unknown>
+      }
+
+    expect('진행' in dataOf(buildFeaturePrompt('month_insight', input))).toBe(false)
+
+    const open = buildFeaturePrompt('month_insight', {
+      ...input,
+      progress: { asOf: '2026-06-03', dayOfMonth: 3, daysInMonth: 30 },
+    })
+    expect(dataOf(open).진행).toEqual({ 기준일: '2026-06-03', 경과일: 3, 총일수: 30 })
+  })
+
+  /**
+   * The prompt must guide tone, scope, and required content — not hand the model a
+   * metric to apply. A precomputed plan-vs-actual share comparison was the source of
+   * the "실제 지출 비중이 계획보다" claim firing on in-budget, early-month spending.
+   */
+  it('guides judgement instead of prescribing a metric', () => {
     const prompt = buildFeaturePrompt('month_insight', input)
+    const instructions = prompt.user.split('<monthly_data>')[0]
     const schema = prompt.schema as {
       properties: { bullets: { minItems: number; maxItems: number } }
     }
 
-    expect(prompt.system).toContain('초과분만큼 줄일 수 있는 대상은 다음 기간의 실제 지출')
-    expect(prompt.system).toContain('계획 비중과 실제 비중의 차이')
-    expect(prompt.system).toContain('고액·반복·일회성 결제')
-    expect(prompt.system).toContain('목표·실적·초과분을 모두 금액으로 반복하지 마세요')
-    expect(prompt.system).toContain('예산을 ₩303,855 초과했고')
-    expect(prompt.system).toContain('예산상 전체 지출의 8%로 계획됐지만 실제로는 20%')
-    expect(prompt.user).toContain('초과분 금액을 한 번 밝히고')
-    expect(prompt.user).toContain('근거 없는 비교·유지·희생')
-    expect(prompt.system).toContain('한도를 초과분 규모로 축소')
-    expect(prompt.system).not.toContain('식비 한도만 초과분 규모로 재설계')
+    expect(prompt.system).toContain('무엇이 중요한 근거인지는 당신이 판단합니다')
+    expect(prompt.system).toContain('경과일이 적을수록 분모가 작아')
+    expect(prompt.system).toContain('목표를 넘지 않은 지출은 그 자체로 문제가 아닙니다')
+    expect(prompt.system).toContain('줄일 수 있는 대상은 앞으로의 실제 지출')
+    expect(prompt.system).toContain('초과분 금액을 한 번 밝힙니다')
+    expect(prompt.system).toContain('# 톤 앤 매너')
+    expect(prompt.system).toContain('# 다뤄야 할 범위')
+    expect(prompt.system).toContain('# 반드시 포함할 것')
+    expect(instructions).toContain('특정 지표를 억지로 끼워 맞추지 마세요')
+    expect(instructions).toContain('근거 없는 비교·유지·희생')
+    // No prescribed share comparison anywhere in the instructions.
+    expect(prompt.system).not.toContain('계획 비중')
+    expect(prompt.system).not.toContain('퍼센트포인트')
+    expect(instructions).not.toContain('비중')
     expect(schema.properties.bullets).toMatchObject({ minItems: 2, maxItems: 4 })
   })
 })

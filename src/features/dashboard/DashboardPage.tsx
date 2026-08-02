@@ -74,7 +74,9 @@ export function DashboardPage() {
     ym,
     summary,
     achievements,
-    paceRows: showPace ? budgetPaceRowsWithStatus(paceRows, ym) : undefined,
+    inProgress: showPace
+      ? { asOf: today, paceRows: budgetPaceRowsWithStatus(paceRows, ym) }
+      : undefined,
     breakdown,
   })
 

@@ -10,23 +10,25 @@ import type { BudgetPaceRowWithStatus } from '../domain/budgetPace'
 import type { MonthSummary } from '../domain/monthSummary'
 import type { CategoryBreakdownRow } from '../domain/reports'
 import type { YearMonth } from '../lib/month'
-import { monthKey } from '../lib/month'
+import { dayOfMonthFromISO, daysInCalendarMonth, monthKey } from '../lib/month'
 import { AI_LIMITS, type MonthInsightInput } from './types'
 
 export function buildMonthInsightInput(args: {
   ym: YearMonth
   summary: MonthSummary
   achievements: readonly AchievementRow[]
-  /** Pass only for the in-progress month (pace is meaningless afterwards). */
-  paceRows?: readonly BudgetPaceRowWithStatus[]
+  /**
+   * Pass only for the in-progress month. Bundling `asOf` with `paceRows` keeps the
+   * payload from ever carrying pace without elapsed time (or the reverse): both
+   * describe "the month isn't over", and a reader that sees one but not the other
+   * would misread month-to-date figures as final.
+   */
+  inProgress?: { asOf: string; paceRows: readonly BudgetPaceRowWithStatus[] }
   /** Sorted desc by `categoryExpenseBreakdown`; top 5 are sent. */
   breakdown: readonly CategoryBreakdownRow[]
 }): MonthInsightInput {
-  const { ym, summary, achievements, paceRows, breakdown } = args
+  const { ym, summary, achievements, inProgress, breakdown } = args
   const caps = AI_LIMITS.monthInsight
-  const totalExpenseBudget = achievements
-    .filter((a) => a.type === 'expense')
-    .reduce((sum, a) => sum + a.target, 0)
 
   const input: MonthInsightInput = {
     month: monthKey(ym.year, ym.month),
@@ -37,20 +39,15 @@ export function buildMonthInsightInput(args: {
       totalInvestment: summary.totalInvestment,
       balance: summary.balance,
     },
+    totalExpenseBudget: achievements
+      .filter((a) => a.type === 'expense')
+      .reduce((sum, a) => sum + a.target, 0),
     achievements: achievements.slice(0, caps.achievementsMax).map((a) => ({
       name: a.name,
       type: a.type,
       target: a.target,
       actual: a.actual,
       status: a.status,
-      plannedExpenseSharePct:
-        a.type === 'expense' && totalExpenseBudget > 0
-          ? Math.round((a.target / totalExpenseBudget) * 100)
-          : null,
-      actualExpenseSharePct:
-        a.type === 'expense' && summary.totalExpense > 0
-          ? Math.round((a.actual / summary.totalExpense) * 100)
-          : null,
     })),
     topExpenses: breakdown.slice(0, caps.topExpensesMax).map((r) => ({
       name: r.name,
@@ -59,8 +56,15 @@ export function buildMonthInsightInput(args: {
     })),
   }
 
-  if (paceRows) {
-    input.pace = paceRows.slice(0, caps.paceMax).map((p) => ({
+  if (inProgress) {
+    const daysInMonth = daysInCalendarMonth(ym.year, ym.month)
+    const day = dayOfMonthFromISO(inProgress.asOf)
+    input.progress = {
+      asOf: inProgress.asOf,
+      dayOfMonth: Math.min(Math.max(day, 1), daysInMonth),
+      daysInMonth,
+    }
+    input.pace = inProgress.paceRows.slice(0, caps.paceMax).map((p) => ({
       name: p.name,
       remainingBudget: p.remainingBudget,
       daysRemaining: p.daysRemaining,

@@ -52,7 +52,7 @@ describe('buildMonthInsightInput (S06 / PR-6)', () => {
       ym: YM,
       summary: SUMMARY,
       achievements: [achievement(1)],
-      paceRows: [paceRow(1)],
+      inProgress: { asOf: '2026-07-03', paceRows: [paceRow(1)] },
       breakdown: [breakdownRow(1)],
     })
 
@@ -61,18 +61,19 @@ describe('buildMonthInsightInput (S06 / PR-6)', () => {
       'achievements',
       'month',
       'pace',
+      'progress',
       'summary',
       'topExpenses',
+      'totalExpenseBudget',
     ])
     expect(input.summary).toEqual(SUMMARY)
+    expect(input.totalExpenseBudget).toBe(100_000)
     expect(input.achievements[0]).toEqual({
       name: '카테고리1',
       type: 'expense',
       target: 100_000,
       actual: 50_000,
       status: '정상',
-      plannedExpenseSharePct: 100,
-      actualExpenseSharePct: 4,
     })
     expect(input.pace?.[0]).toEqual({
       name: '카테고리1',
@@ -86,7 +87,7 @@ describe('buildMonthInsightInput (S06 / PR-6)', () => {
     expect(JSON.stringify(input)).not.toContain('cat-1')
   })
 
-  it('omits pace entirely when paceRows is not provided (past months)', () => {
+  it('omits pace and progress together when the month is closed', () => {
     const input = buildMonthInsightInput({
       ym: YM,
       summary: SUMMARY,
@@ -94,9 +95,26 @@ describe('buildMonthInsightInput (S06 / PR-6)', () => {
       breakdown: [],
     })
     expect('pace' in input).toBe(false)
+    expect('progress' in input).toBe(false)
   })
 
-  it('compares planned expense share with actual spending share', () => {
+  it('reports elapsed days so month-to-date totals are not read as final', () => {
+    const input = buildMonthInsightInput({
+      ym: YM,
+      summary: SUMMARY,
+      achievements: [],
+      inProgress: { asOf: '2026-07-03', paceRows: [] },
+      breakdown: [],
+    })
+    expect(input.progress).toEqual({ asOf: '2026-07-03', dayOfMonth: 3, daysInMonth: 31 })
+  })
+
+  /**
+   * Guards the reported defect: a category's spend share of month-to-date expense
+   * is not comparable to its share of the month's budget plan (different denominators,
+   * and the actual one is still growing), so neither is sent as a precomputed metric.
+   */
+  it('sends only base figures per achievement — no derived share percentages', () => {
     const shopping = { ...achievement(1), name: '쇼핑', target: 200_000, actual: 503_855 }
     const food = { ...achievement(2), name: '식비', target: 1_800_000, actual: 1_000_000 }
 
@@ -107,16 +125,14 @@ describe('buildMonthInsightInput (S06 / PR-6)', () => {
       breakdown: [],
     })
 
-    expect(input.achievements[0]).toMatchObject({
-      name: '쇼핑',
-      plannedExpenseSharePct: 10,
-      actualExpenseSharePct: 20,
-    })
-    expect(input.achievements[1]).toMatchObject({
-      name: '식비',
-      plannedExpenseSharePct: 90,
-      actualExpenseSharePct: 40,
-    })
+    expect(Object.keys(input.achievements[0]).sort()).toEqual([
+      'actual',
+      'name',
+      'status',
+      'target',
+      'type',
+    ])
+    expect(input.totalExpenseBudget).toBe(2_000_000)
   })
 
   it('caps achievements, pace, and topExpenses at AI_LIMITS.monthInsight', () => {
@@ -125,7 +141,7 @@ describe('buildMonthInsightInput (S06 / PR-6)', () => {
       ym: YM,
       summary: SUMMARY,
       achievements: many(50).map(achievement),
-      paceRows: many(50).map(paceRow),
+      inProgress: { asOf: '2026-07-15', paceRows: many(50).map(paceRow) },
       breakdown: many(9).map(breakdownRow),
     })
     expect(input.achievements).toHaveLength(AI_LIMITS.monthInsight.achievementsMax)

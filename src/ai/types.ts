@@ -152,15 +152,21 @@ export interface NlTxnParseResult {
 export interface MonthInsightInput {
   month: string // YYYY-MM
   summary: MonthSummary
+  /** Σ of every 지출 category budget for the month; 0 when nothing is budgeted. */
+  totalExpenseBudget: number
   achievements: {
     name: string
     type: 'expense' | 'saving'
     target: number
     actual: number
     status: ExpenseStatus | SavingStatus
-    plannedExpenseSharePct: number | null
-    actualExpenseSharePct: number | null
   }[]
+  /**
+   * Present only while the month is in progress — the model needs elapsed time to
+   * read month-to-date totals correctly (on day 3 a single fixed payment dominates
+   * every composition figure). Absent ⇒ the month is closed.
+   */
+  progress?: { asOf: string; dayOfMonth: number; daysInMonth: number }
   pace?: {
     name: string
     remainingBudget: number
@@ -182,7 +188,7 @@ export interface MonthInsightResult {
  * otherwise, so a prompt-only deploy would keep serving stale bullets for TTL).
  * Included in the client hash payload only — never sent as gateway `input`.
  */
-export const MONTH_INSIGHT_PROMPT_REV = 10
+export const MONTH_INSIGHT_PROMPT_REV = 11
 
 /**
  * Bump when the Edge `month_close_narrative` prompt or output contract changes.
