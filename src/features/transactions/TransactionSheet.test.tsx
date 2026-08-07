@@ -17,6 +17,7 @@ vi.mock('../../data/transactions', () => ({
   createTransaction: vi.fn(),
   updateTransaction: vi.fn(),
   fetchMemoHistory: vi.fn().mockResolvedValue([]),
+  fetchNearDuplicateCandidates: vi.fn().mockResolvedValue([]),
 }))
 vi.mock('../../ai/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../ai/client')>()
@@ -25,13 +26,19 @@ vi.mock('../../ai/client', async (importOriginal) => {
 
 import { invokeAiFeature } from '../../ai/client'
 import { getAiUserSettings } from '../../data/aiSettings'
-import { createTransaction, fetchMemoHistory } from '../../data/transactions'
+import {
+  createTransaction,
+  fetchMemoHistory,
+  fetchNearDuplicateCandidates,
+} from '../../data/transactions'
+import type { Transaction } from '../../domain/types'
 import { TransactionSheet } from './TransactionSheet'
 
 const mockedInvoke = vi.mocked(invokeAiFeature)
 const mockedSettings = vi.mocked(getAiUserSettings)
 const mockedCreate = vi.mocked(createTransaction)
 const mockedMemoHistory = vi.mocked(fetchMemoHistory)
+const mockedNearDuplicates = vi.mocked(fetchNearDuplicateCandidates)
 
 const USER_ID = 'user-1'
 const LEDGER_ID = 'ledger-1'
@@ -110,6 +117,7 @@ function renderSheet({ canEdit = true }: { canEdit?: boolean } = {}) {
 beforeEach(() => {
   vi.clearAllMocks()
   mockedSettings.mockResolvedValue(aiSettings(true))
+  mockedNearDuplicates.mockResolvedValue([])
 })
 
 describe('TransactionSheet NL draft field (S05 / PR-5)', () => {
@@ -230,5 +238,123 @@ describe('TransactionSheet Memo category suggestion (S09 / PR-10)', () => {
 
     // Verification: LLM/quota call was NEVER made during category suggestion
     expect(mockedInvoke).not.toHaveBeenCalled()
+  })
+})
+
+describe('TransactionSheet pre-save near-duplicate guard (S11 / PR-12)', () => {
+  function existingTxn(overrides: Partial<Transaction> = {}): Transaction {
+    return {
+      id: 'existing-1',
+      ledgerId: LEDGER_ID,
+      categoryId: 'c-food',
+      txnDate: '2026-07-19',
+      type: 'expense',
+      amount: 12000,
+      memo: '점심',
+      source: 'manual',
+      recurringId: null,
+      occurrenceMonth: null,
+      createdAt: '',
+      updatedAt: '',
+      ...overrides,
+    }
+  }
+
+  it('warns instead of writing when a near-duplicate exists, then saves on a second press', async () => {
+    const user = userEvent.setup()
+    // One day earlier than the draft — invisible to the old exact key, caught now.
+    mockedNearDuplicates.mockResolvedValue([existingTxn({ txnDate: '2026-07-18' })])
+    mockedCreate.mockResolvedValue(undefined as never)
+    mockedInvoke.mockResolvedValue(
+      okResponse({
+        amount: 12000,
+        type: 'expense',
+        categoryName: '식비',
+        date: '2026-07-19',
+        memo: '점심',
+      }),
+    )
+    renderSheet()
+
+    const field = await screen.findByLabelText('자연어로 입력')
+    await user.type(field, '점심 12000원 식비')
+    await user.click(screen.getByRole('button', { name: '적용' }))
+    await screen.findByDisplayValue('점심')
+
+    await user.click(screen.getByRole('button', { name: '저장' }))
+
+    // First press warns and writes nothing.
+    await screen.findByText('비슷한 거래가 이미 1건 있습니다. 중복 입력일 수 있습니다.')
+    expect(mockedCreate).not.toHaveBeenCalled()
+
+    // Second press on the same draft goes through the existing create path.
+    await user.click(screen.getByRole('button', { name: '그래도 저장' }))
+    await waitFor(() => {
+      expect(mockedCreate).toHaveBeenCalledWith(LEDGER_ID, {
+        categoryId: 'c-food',
+        type: 'expense',
+        txnDate: '2026-07-19',
+        amount: 12000,
+        memo: '점심',
+      })
+    })
+  })
+
+  it('revokes the warning when the draft changes, so the guard re-runs', async () => {
+    const user = userEvent.setup()
+    mockedNearDuplicates.mockResolvedValue([existingTxn()])
+    mockedInvoke.mockResolvedValue(
+      okResponse({
+        amount: 12000,
+        type: 'expense',
+        categoryName: '식비',
+        date: '2026-07-19',
+        memo: '점심',
+      }),
+    )
+    renderSheet()
+
+    const field = await screen.findByLabelText('자연어로 입력')
+    await user.type(field, '점심 12000원 식비')
+    await user.click(screen.getByRole('button', { name: '적용' }))
+    await screen.findByDisplayValue('점심')
+
+    await user.click(screen.getByRole('button', { name: '저장' }))
+    await screen.findByText('비슷한 거래가 이미 1건 있습니다. 중복 입력일 수 있습니다.')
+
+    // Editing the amount invalidates the acknowledgement: the banner goes away
+    // and the button reverts, so the next press guards again rather than writing.
+    await user.type(screen.getByPlaceholderText('0'), '0')
+    await waitFor(() => {
+      expect(
+        screen.queryByText('비슷한 거래가 이미 1건 있습니다. 중복 입력일 수 있습니다.'),
+      ).not.toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: '저장' })).toBeInTheDocument()
+    expect(mockedCreate).not.toHaveBeenCalled()
+  })
+
+  it('saves without warning when the lookup fails (guard fails open)', async () => {
+    const user = userEvent.setup()
+    mockedNearDuplicates.mockRejectedValue(new Error('network'))
+    mockedCreate.mockResolvedValue(undefined as never)
+    mockedInvoke.mockResolvedValue(
+      okResponse({
+        amount: 12000,
+        type: 'expense',
+        categoryName: '식비',
+        date: '2026-07-19',
+        memo: '점심',
+      }),
+    )
+    renderSheet()
+
+    const field = await screen.findByLabelText('자연어로 입력')
+    await user.type(field, '점심 12000원 식비')
+    await user.click(screen.getByRole('button', { name: '적용' }))
+    await screen.findByDisplayValue('점심')
+
+    await user.click(screen.getByRole('button', { name: '저장' }))
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1))
   })
 })

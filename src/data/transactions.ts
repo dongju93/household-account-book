@@ -1,5 +1,6 @@
 import type { FundType } from '../domain/fundType'
 import type { Transaction, TxnSource } from '../domain/types'
+import { addDaysISO } from '../lib/month'
 import { supabase } from '../lib/supabase'
 import { mapTransaction } from './mappers'
 
@@ -124,6 +125,37 @@ export async function fetchMemoHistory(
     categoryId: row.category_id,
     memo: row.memo,
   }))
+}
+
+/**
+ * Rows that could be near-duplicates of a draft (§5.14 pre-save guard).
+ *
+ * Narrowed server-side on exactly the fields `isNearDuplicate` requires to match
+ * exactly — type, amount, category — plus the ±1-day window. The fuzzy part
+ * (memo similarity) stays in the domain layer, so the rule lives in one place and
+ * this query stays index-friendly (`transactions_ledger_type_date_idx`).
+ * Read-only; it exists so the guard can warn, never to gate a write server-side.
+ */
+export async function fetchNearDuplicateCandidates(
+  ledgerId: string,
+  draft: { txnDate: string; type: FundType; amount: number; categoryId: string },
+  limit = 20,
+): Promise<Transaction[]> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('ledger_id', ledgerId)
+    .eq('type', draft.type)
+    .eq('amount', draft.amount)
+    .eq('category_id', draft.categoryId)
+    .gte('txn_date', addDaysISO(draft.txnDate, -1))
+    .lte('txn_date', addDaysISO(draft.txnDate, 1))
+    .order('txn_date', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(limit)
+
+  if (error) throw error
+  return (data ?? []).map(mapTransaction)
 }
 
 export interface TxnWrite {

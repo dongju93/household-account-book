@@ -2,6 +2,7 @@ import { won } from '../lib/format'
 import type { YearMonth } from '../lib/month'
 import { monthKey } from '../lib/month'
 import type { AchievementRow } from './achievement'
+import { findFuzzyDuplicateGroups } from './fuzzyDuplicates'
 import type { CategoryLike, RecurringItem, Transaction } from './types'
 
 export type MonthCloseFindingKind =
@@ -75,42 +76,45 @@ export function findMissingRecurringOccurrences(
   return findings.sort(byAmountDesc).map(dropAmount)
 }
 
-/** Group key: same date + amount + category + memo (trimmed, null treated as ''). */
-function duplicateKey(t: Transaction): string {
-  return `${t.txnDate}|${t.amount}|${t.categoryId}|${(t.memo ?? '').trim()}`
-}
-
-/** Same date, amount, category, and (trimmed) memo repeated 2+ times within the month. */
+/**
+ * Same amount + category + type repeated 2+ times within a two-day window, with
+ * memos that match, contain one another, or are blank on one side.
+ *
+ * Widened from the original exact `date|amount|category|memo` key by
+ * `findFuzzyDuplicateGroups` (§5.7): a double entry logged the next day, or
+ * re-entered without retyping the memo, went unreported before. The label says
+ * "의심" for anything past an exact repeat so a false positive reads as a
+ * prompt to look, never as a verdict — and nothing here deletes or edits.
+ *
+ * `txns` is one month's rows, so a pair straddling a month boundary (06-30 and
+ * 07-01) is invisible to *this* caller. The list banner and the pre-save guard
+ * both query by date window rather than by month and do see it.
+ */
 export function findDuplicateCandidates(
   txns: readonly Transaction[],
   categoryNameById: ReadonlyMap<string, string>,
   ym: YearMonth,
 ): MonthCloseFinding[] {
   const month = monthKey(ym.year, ym.month)
-  const groups = new Map<string, Transaction[]>()
-  for (const t of txns) {
-    const key = duplicateKey(t)
-    const group = groups.get(key)
-    if (group) group.push(t)
-    else groups.set(key, [t])
-  }
 
-  const findings: Ranked[] = []
-  for (const group of groups.values()) {
-    if (group.length < 2) continue
-    const [first] = group
-    const categoryName = categoryNameById.get(first.categoryId) ?? '카테고리 없음'
-    findings.push({
+  const findings: Ranked[] = findFuzzyDuplicateGroups(txns).map((group) => {
+    const categoryName = categoryNameById.get(group.categoryId) ?? '카테고리 없음'
+    const dateLabel =
+      group.firstDate === group.lastDate ? group.firstDate : `${group.firstDate}~${group.lastDate}`
+    const suffix = group.reason === 'exact' ? '' : ' 날짜·메모가 비슷해 중복이 의심됩니다.'
+    return {
       kind: 'duplicate_candidate',
-      label: `${first.txnDate} ${categoryName} ${won(first.amount)} 거래가 ${group.length}건 반복되었습니다.`,
+      label: `${dateLabel} ${categoryName} ${won(group.amount)} 거래가 ${group.txns.length}건 반복되었습니다.${suffix}`,
       nav: {
         month,
-        categoryId: first.categoryId,
-        memoContains: (first.memo ?? '').trim() || undefined,
+        categoryId: group.categoryId,
+        // Only an all-members-agree memo narrows the navigation; a group held
+        // together by *similar* memos has none that would find all its rows.
+        memoContains: group.sharedMemo ?? undefined,
       },
-      amount: first.amount * group.length,
-    })
-  }
+      amount: group.amount * group.txns.length,
+    }
+  })
 
   return findings.sort(byAmountDesc).map(dropAmount)
 }

@@ -18,6 +18,7 @@ import {
 import { buildTxnExportRows, txnExportFilename } from '../../domain/exportTransactions'
 import type { FundType } from '../../domain/fundType'
 import { FUND_TYPES, fundTypeLabel } from '../../domain/fundType'
+import { findFuzzyDuplicateGroups } from '../../domain/fuzzyDuplicates'
 import { groupTransactionsByDate } from '../../domain/transactionGroups'
 import type { Transaction } from '../../domain/types'
 import { downloadTxnExportXlsx } from '../../lib/exportXlsx'
@@ -35,6 +36,7 @@ import {
   TextInput,
   TransactionListSkeleton,
 } from '../../ui'
+import { DuplicateSuspectBanner } from './DuplicateSuspectBanner'
 import { TransactionSheet } from './TransactionSheet'
 import { TxnRow } from './TxnRow'
 
@@ -132,6 +134,8 @@ export function TransactionsPage() {
   }
 
   const groups = groupTransactionsByDate(rows)
+  // §5.7: computed from the rows already in hand — pure domain, no extra query.
+  const duplicateGroups = findFuzzyDuplicateGroups(rows)
 
   return (
     <>
@@ -242,6 +246,10 @@ export function TransactionsPage() {
                 : '＋ 버튼으로 이 달의 거래를 추가해 보세요.'
             }
           />
+        )}
+
+        {!loading && !listError && (
+          <DuplicateSuspectBanner groups={duplicateGroups} categoryNameById={nameById} />
         )}
 
         {!loading &&

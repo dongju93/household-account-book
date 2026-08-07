@@ -1,13 +1,23 @@
 import { useId, useState } from 'react'
 
 import { useValidatedSubmit } from '../../app/useValidatedSubmit'
-import { createTransaction, updateTransaction } from '../../data/transactions'
+import {
+  createTransaction,
+  fetchNearDuplicateCandidates,
+  updateTransaction,
+} from '../../data/transactions'
 import type { NlTxnDraftNormalized } from '../../domain/ai/nlTxnDraft'
 import { FUND_TYPE_ITEMS } from '../../domain/fundType'
 import type { FundType } from '../../domain/fundType'
+import {
+  type DuplicateCandidateTxn,
+  findNearDuplicatesForDraft,
+  normalizeMemo,
+} from '../../domain/fuzzyDuplicates'
 import type { Category, Transaction } from '../../domain/types'
 import { validateTransactionInput } from '../../domain/validation'
-import { todayISO } from '../../lib/month'
+import { won } from '../../lib/format'
+import { formatDayHeader, todayISO } from '../../lib/month'
 import {
   AmountInput,
   BottomSheet,
@@ -55,6 +65,16 @@ export function TransactionSheet({
   const [keepOpen, setKeepOpen] = useState(false)
   // Remount key for the NL field: bumping it clears text/banner/warnings after 저장 후 계속.
   const [nlGeneration, setNlGeneration] = useState(0)
+  // §5.14 pre-save guard. The warning carries the *form state it was raised for*
+  // rather than a boolean, and that one key does double duty: the banner renders
+  // only while the form still matches it, and a second 저장 press only proceeds
+  // for that same key. Editing any field after the warning therefore both hides
+  // the stale list and revokes the acknowledgement — "acknowledged a draft the
+  // user has since changed" is not a representable state.
+  const [duplicateWarning, setDuplicateWarning] = useState<{
+    formKey: string
+    txns: DuplicateCandidateTxn[]
+  } | null>(null)
   const { errors, submitError, saving, run } = useValidatedSubmit()
   const amountErrorId = useId()
   const categoryErrorId = useId()
@@ -89,6 +109,53 @@ export function TransactionSheet({
     if (draft.memo != null) setMemo(draft.memo)
   }
 
+  /**
+   * Rows already on record that this draft would duplicate.
+   *
+   * Fails **open**: if the lookup errors (offline, RLS, timeout) the save
+   * proceeds unwarned. A duplicate is a nuisance; a guard that blocks a
+   * legitimate save because a read failed is a broken app.
+   */
+  async function findExistingNearDuplicates(value: {
+    date: string
+    amount: number
+    categoryId: string
+    type: FundType
+    memo: string | null
+  }): Promise<DuplicateCandidateTxn[]> {
+    try {
+      const existing = await fetchNearDuplicateCandidates(ledgerId, {
+        txnDate: value.date,
+        type: value.type,
+        amount: value.amount,
+        categoryId: value.categoryId,
+      })
+      return findNearDuplicatesForDraft(
+        {
+          txnDate: value.date,
+          type: value.type,
+          amount: value.amount,
+          categoryId: value.categoryId,
+          memo: value.memo,
+        },
+        existing,
+        { excludeId: transaction?.id ?? null },
+      )
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Identity of the current form state for guard purposes. Built from the raw
+   * fields rather than the validated draft so it can be recomputed on every
+   * render without running validation. Two different raw states that validate to
+   * the same transaction (e.g. "10000" vs " 10000") simply re-run the guard —
+   * the conservative direction.
+   */
+  const formKey = [date, amount.trim(), categoryId, type, normalizeMemo(memo)].join('|')
+  const showDuplicateWarning = duplicateWarning?.formKey === formKey
+
   async function handleSubmit() {
     const category = categories.find((c) => c.id === categoryId) ?? null
     const ok = await run(
@@ -98,6 +165,17 @@ export function TransactionSheet({
           category,
         ),
       async (value) => {
+        // Guard runs on the *validated* draft, so it queries the integer amount
+        // that would actually be written — never the raw input string.
+        if (!showDuplicateWarning) {
+          const matches = await findExistingNearDuplicates(value)
+          if (matches.length > 0) {
+            setDuplicateWarning({ formKey, txns: matches })
+            return // warn and stop; a second 저장 press on the same form writes.
+          }
+        }
+        setDuplicateWarning(null)
+
         const write = {
           categoryId: value.categoryId,
           type: value.type,
@@ -263,10 +341,36 @@ export function TransactionSheet({
           </label>
         )}
 
+        {/* §5.14: a warning, not a block. The rows are listed so the user can
+            recognise their own entry rather than take the app's word for it, and
+            the only actions offered are 저장 (proceed) and closing the sheet —
+            nothing here deletes or edits the existing rows (§5.7). */}
+        {showDuplicateWarning && (
+          <div
+            role="alert"
+            className="flex flex-col gap-1.5 rounded-surface border border-status-warning/35 bg-status-warning/8 px-3 py-2.5"
+          >
+            <p className="text-caption font-semibold text-status-warning">
+              비슷한 거래가 이미 {duplicateWarning.txns.length}건 있습니다. 중복 입력일 수 있습니다.
+            </p>
+            <ul className="text-caption flex flex-col gap-0.5 text-ink2">
+              {duplicateWarning.txns.map((t) => (
+                <li key={t.id} className="tnum">
+                  {formatDayHeader(t.txnDate)} · {won(t.amount)}
+                  {t.memo?.trim() ? ` · ${t.memo.trim()}` : ''}
+                </li>
+              ))}
+            </ul>
+            <p className="text-caption text-ink2">
+              그래도 저장하려면 저장을 한 번 더 누르세요. 기존 거래는 그대로 유지됩니다.
+            </p>
+          </div>
+        )}
+
         {submitError && <ErrorBanner message={submitError} />}
 
         <Button onClick={handleSubmit} disabled={saving}>
-          {saving ? '저장 중…' : '저장'}
+          {saving ? '저장 중…' : showDuplicateWarning ? '그래도 저장' : '저장'}
         </Button>
 
         {/* §6.5: two-step inline delete, unchanged. Only the confirming step's
