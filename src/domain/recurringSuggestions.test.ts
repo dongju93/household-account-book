@@ -95,6 +95,49 @@ describe('suggestRecurringItems', () => {
     expect(suggestRecurringItems(rows, categories)).toEqual([])
   })
 
+  it('keeps a drifting three-month run that first-fit clustering would split', () => {
+    // 100_000 pairs with 104_000 first, and 108_000 no longer fits that pair —
+    // but 104_000/108_000/108_000 is a valid three-month pattern on its own.
+    const result = suggestRecurringItems(
+      [
+        txn('2026-01-10', 100_000),
+        txn('2026-02-10', 104_000),
+        txn('2026-03-10', 108_000),
+        txn('2026-04-10', 108_000),
+      ],
+      categories,
+    )
+
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({
+      months: ['2026-02', '2026-03', '2026-04'],
+      amount: 108_000,
+      dayOfMonth: 10,
+      amountMin: 104_000,
+      amountMax: 108_000,
+    })
+  })
+
+  it('lets each transaction back only one suggestion, longest run first', () => {
+    const result = suggestRecurringItems(
+      [
+        txn('2026-01-10', 100_000),
+        txn('2026-02-10', 100_000),
+        txn('2026-03-10', 100_000),
+        txn('2026-04-10', 100_000),
+        txn('2026-01-20', 300_000),
+        txn('2026-02-20', 300_000),
+        txn('2026-03-20', 300_000),
+      ],
+      categories,
+    )
+
+    expect(result.map((item) => ({ amount: item.amount, months: item.months }))).toEqual([
+      { amount: 100_000, months: ['2026-01', '2026-02', '2026-03', '2026-04'] },
+      { amount: 300_000, months: ['2026-01', '2026-02', '2026-03'] },
+    ])
+  })
+
   it('removes a suggestion already represented by a recurring item', () => {
     const rows = [txn('2026-01-09', 100_000), txn('2026-02-10', 101_000), txn('2026-03-11', 99_000)]
     expect(
