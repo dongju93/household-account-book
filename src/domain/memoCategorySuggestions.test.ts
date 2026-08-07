@@ -81,6 +81,20 @@ describe('suggestCategoriesFromMemo', () => {
     expect(suggestions).toEqual([])
   })
 
+  it('still matches a single-character memo exactly', () => {
+    const history = [{ categoryId: 'c-food', memo: '밥' }]
+    const suggestions = suggestCategoriesFromMemo('밥', CATEGORIES, history)
+    expect(suggestions).toEqual([
+      { categoryId: 'c-food', categoryName: '식비', type: 'expense', matchType: 'history' },
+    ])
+  })
+
+  it('does not substring-match single-character memos against longer text', () => {
+    const history = [{ categoryId: 'c-food', memo: '밥' }]
+    const suggestions = suggestCategoriesFromMemo('동네 밥상에서 점심', CATEGORIES, history)
+    expect(suggestions).toEqual([])
+  })
+
   it('limits suggestions to maxSuggestions (default 3)', () => {
     const cats: Category[] = Array.from({ length: 5 }, (_, i) => ({
       id: `c-${i}`,

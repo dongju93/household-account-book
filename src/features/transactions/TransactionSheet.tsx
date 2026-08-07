@@ -173,6 +173,8 @@ export function TransactionSheet({
                   active={s.categoryId === categoryId}
                   density="compact"
                   onClick={() => {
+                    // Deliberately bypasses changeType (which resets the category):
+                    // a suggestion applies type + category as one unit, like applyNlDraft.
                     if (s.type !== type) {
                       setType(s.type)
                     }

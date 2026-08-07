@@ -200,9 +200,7 @@ describe('TransactionSheet NL draft field (S05 / PR-5)', () => {
 describe('TransactionSheet Memo category suggestion (S09 / PR-10)', () => {
   it('shows recommendation chip after debounced memo typing and sets category on tap', async () => {
     const user = userEvent.setup()
-    mockedMemoHistory.mockResolvedValue([
-      { categoryId: 'c-food', type: 'expense', memo: '스타벅스', txnDate: '2026-08-01' },
-    ])
+    mockedMemoHistory.mockResolvedValue([{ categoryId: 'c-food', memo: '스타벅스' }])
     renderSheet()
 
     const memoInput = screen.getByPlaceholderText('메모')
@@ -214,9 +212,21 @@ describe('TransactionSheet Memo category suggestion (S09 / PR-10)', () => {
       expect(screen.getAllByRole('button', { name: '식비' })).toHaveLength(2)
     })
 
+    // Nothing selected yet — both the 추천 chip and the category chip are off.
+    for (const chip of screen.getAllByRole('button', { name: '식비' })) {
+      expect(chip).toHaveAttribute('aria-pressed', 'false')
+    }
+
     // Click recommendation chip (the first '식비' button inside 추천 container)
     const recChip = screen.getByText('추천:').parentElement!
     await user.click(recChip.querySelector('button')!)
+
+    // Tapping the suggestion selects the category (and its fund type) in the form.
+    await waitFor(() => {
+      for (const chip of screen.getAllByRole('button', { name: '식비' })) {
+        expect(chip).toHaveAttribute('aria-pressed', 'true')
+      }
+    })
 
     // Verification: LLM/quota call was NEVER made during category suggestion
     expect(mockedInvoke).not.toHaveBeenCalled()

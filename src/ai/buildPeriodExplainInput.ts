@@ -30,7 +30,7 @@ export function buildPeriodExplainInput(args: {
       investment: pt.totalInvestment,
       balance: pt.balance,
     })),
-    topCategories: breakdown.slice(0, 5).map((r) => ({
+    topCategories: breakdown.slice(0, caps.topCategoriesMax).map((r) => ({
       name: r.name,
       amount: r.amount,
       pct: r.pct,

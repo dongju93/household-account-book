@@ -17,37 +17,27 @@ export function useMemoCategorySuggestions({
   memo: string
   categories: Category[]
   enabled?: boolean
-}): {
-  suggestions: SuggestedCategory[]
-  loading: boolean
-} {
+}): { suggestions: SuggestedCategory[] } {
   const [suggestions, setSuggestions] = useState<SuggestedCategory[]>([])
-  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (!enabled || !ledgerId || !memo.trim()) {
       setSuggestions([])
-      setLoading(false)
       return
     }
 
     let cancelled = false
-    setLoading(true)
 
     // 400ms debounce (spec §5.2)
     const timer = setTimeout(async () => {
       try {
         const history = await fetchMemoHistory(ledgerId, memo)
         if (cancelled) return
-        const computed = suggestCategoriesFromMemo(memo, categories, history)
-        setSuggestions(computed)
+        setSuggestions(suggestCategoriesFromMemo(memo, categories, history))
       } catch {
         if (cancelled) return
         // Fallback to name matching if history fetch fails
-        const computed = suggestCategoriesFromMemo(memo, categories, [])
-        setSuggestions(computed)
-      } finally {
-        if (!cancelled) setLoading(false)
+        setSuggestions(suggestCategoriesFromMemo(memo, categories, []))
       }
     }, 400)
 
@@ -57,5 +47,5 @@ export function useMemoCategorySuggestions({
     }
   }, [ledgerId, memo, categories, enabled])
 
-  return { suggestions, loading }
+  return { suggestions }
 }

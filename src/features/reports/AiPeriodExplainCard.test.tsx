@@ -76,7 +76,7 @@ function okResponse(
   }
 }
 
-function renderCard(ready = true) {
+function renderCard(ready = true, input: PeriodExplainInput = INPUT) {
   const auth: AuthValue = {
     status: 'authed',
     user: { id: USER_ID } as AuthValue['user'],
@@ -88,7 +88,7 @@ function renderCard(ready = true) {
   return render(
     <AuthContext.Provider value={auth}>
       <AiSettingsProvider>
-        <AiPeriodExplainCard ledgerId={LEDGER_ID} input={INPUT} ready={ready} />
+        <AiPeriodExplainCard ledgerId={LEDGER_ID} input={input} ready={ready} />
       </AiSettingsProvider>
     </AuthContext.Provider>,
   )
@@ -113,6 +113,14 @@ describe('AiPeriodExplainCard (S08 / PR-9)', () => {
     renderCard(false)
 
     // Give microtasks time to run
+    await waitFor(() => expect(mockedSettings).toHaveBeenCalled())
+    expect(screen.queryByText('AI 기간 해설')).not.toBeInTheDocument()
+    expect(mockedInvoke).not.toHaveBeenCalled()
+  })
+
+  it('renders nothing and never invokes gateway when months is empty', async () => {
+    renderCard(true, { periodKey: '3m:_', months: [] })
+
     await waitFor(() => expect(mockedSettings).toHaveBeenCalled())
     expect(screen.queryByText('AI 기간 해설')).not.toBeInTheDocument()
     expect(mockedInvoke).not.toHaveBeenCalled()

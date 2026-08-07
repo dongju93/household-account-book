@@ -156,12 +156,27 @@ function validateMonthInsight(input: unknown): ValidationResult {
 
 function validatePeriodExplain(input: unknown): ValidationResult {
   if (!isRecord(input)) return fail('period_explain.input은 객체여야 합니다.')
-  const { periodKey, months } = input
+  const { periodKey, months, topCategories } = input
   if (typeof periodKey !== 'string' || periodKey.length === 0 || periodKey.length > 32) {
     return fail('periodKey가 필요합니다.')
   }
   if (!Array.isArray(months) || months.length === 0 || months.length > 12) {
     return fail('months는 1~12개여야 합니다.')
+  }
+  if (topCategories !== undefined && (!Array.isArray(topCategories) || topCategories.length > 5)) {
+    return fail('topCategories는 최대 5개입니다.')
+  }
+  if (Array.isArray(topCategories)) {
+    for (const c of topCategories) {
+      if (!isRecord(c)) return fail('topCategories 항목 형식이 올바르지 않습니다.')
+      // 40 mirrors the categories.name DB check constraint (length 1..40).
+      if (typeof c.name !== 'string' || c.name.length === 0 || c.name.length > 40) {
+        return fail('topCategories.name은 1~40자여야 합니다.')
+      }
+      if (typeof c.amount !== 'number' || typeof c.pct !== 'number') {
+        return fail('topCategories.amount/pct는 숫자여야 합니다.')
+      }
+    }
   }
   return okPlaceholder()
 }

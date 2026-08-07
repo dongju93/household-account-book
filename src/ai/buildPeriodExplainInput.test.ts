@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CategoryBreakdownRow, MonthlyTrendPoint } from '../domain/reports'
+import { lastMonths, monthKey } from '../lib/month'
 import { buildPeriodExplainInput } from './buildPeriodExplainInput'
 
 describe('buildPeriodExplainInput', () => {
@@ -80,17 +81,14 @@ describe('buildPeriodExplainInput', () => {
   })
 
   it('caps trend to at most 12 months', () => {
-    const longTrend: MonthlyTrendPoint[] = Array.from({ length: 15 }, (_, i) => {
-      const monthNum = (i + 1).toString().padStart(2, '0')
-      return {
-        month: `2025-${monthNum}`,
-        totalIncome: 100000,
-        totalExpense: 50000,
-        totalSaving: 20000,
-        totalInvestment: 10000,
-        balance: 20000,
-      }
-    })
+    const longTrend: MonthlyTrendPoint[] = lastMonths({ year: 2025, month: 12 }, 15).map((ym) => ({
+      month: monthKey(ym.year, ym.month),
+      totalIncome: 100000,
+      totalExpense: 50000,
+      totalSaving: 20000,
+      totalInvestment: 10000,
+      balance: 20000,
+    }))
 
     const input = buildPeriodExplainInput({
       period: 12,
@@ -99,9 +97,9 @@ describe('buildPeriodExplainInput', () => {
     })
 
     expect(input.months).toHaveLength(12)
-    expect(input.months[0].month).toBe('2025-04')
-    expect(input.months[11].month).toBe('2025-15')
-    expect(input.periodKey).toBe('12m:2025-04_2025-15')
+    expect(input.months[0].month).toBe('2025-01')
+    expect(input.months[11].month).toBe('2025-12')
+    expect(input.periodKey).toBe('12m:2025-01_2025-12')
     expect(input.periodKey.length).toBeLessThanOrEqual(32)
   })
 })

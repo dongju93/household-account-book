@@ -34,7 +34,7 @@ export function AiPeriodExplainCard({
     loading,
     reload,
   } = useAsyncData<ExplainState>(async () => {
-    if (!enabled || !ready || !ledgerId) return { kind: 'idle' }
+    if (!enabled || !ready || !ledgerId || input.months.length === 0) return { kind: 'hidden' }
     try {
       const hash = await dataVersionHash({ promptRev: PERIOD_EXPLAIN_PROMPT_REV, input })
       const res = await invokeAiFeature<PeriodExplainResult>({

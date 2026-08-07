@@ -3,9 +3,7 @@ import type { Category } from './types'
 
 export interface HistoryTxnItem {
   categoryId: string
-  type?: FundType
   memo?: string | null
-  txnDate?: string
 }
 
 export interface SuggestedCategory {
@@ -13,6 +11,15 @@ export interface SuggestedCategory {
   categoryName: string
   type: FundType
   matchType: 'history' | 'name'
+}
+
+// Substring matches require both sides to be at least this long; single-character
+// tokens match far too indiscriminately (exact equality is always allowed).
+const MIN_SUBSTRING_LENGTH = 2
+
+function isSubstringMatch(a: string, b: string): boolean {
+  if (a.length < MIN_SUBSTRING_LENGTH || b.length < MIN_SUBSTRING_LENGTH) return false
+  return a.includes(b) || b.includes(a)
 }
 
 /**
@@ -45,7 +52,7 @@ export function suggestCategoriesFromMemo(
     if (!category) continue
 
     const isExact = itemMemo === trimmed
-    const isSubstring = itemMemo.includes(trimmed) || trimmed.includes(itemMemo)
+    const isSubstring = isSubstringMatch(itemMemo, trimmed)
 
     if (isExact || isSubstring) {
       const existing = categoryScores.get(item.categoryId) || { count: 0, exactMatches: 0 }
@@ -86,7 +93,7 @@ export function suggestCategoriesFromMemo(
       const catName = category.name.trim().toLowerCase()
       if (!catName) continue
 
-      if (trimmed === catName || trimmed.includes(catName) || catName.includes(trimmed)) {
+      if (trimmed === catName || isSubstringMatch(trimmed, catName)) {
         results.push({
           categoryId: category.id,
           categoryName: category.name,

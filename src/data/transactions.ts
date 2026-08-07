@@ -82,9 +82,22 @@ export async function listAllTransactions(
 
 export interface MemoHistoryItem {
   categoryId: string
-  type: FundType
   memo: string | null
-  txnDate: string
+}
+
+/**
+ * Escape a user memo for use as a Postgres `~*` (imatch) pattern.
+ *
+ * `ilike` is unusable here: PostgREST rewrites every `*` in a like/ilike value
+ * into `%` before Postgres ever sees it, and the rewrite is a blind character
+ * map — sending `\*` yields `\%` (a literal percent), so a literal `*` simply
+ * cannot be expressed. `imatch` passes the value through untouched, and an
+ * unanchored `~*` already means "contains", so no surrounding wildcards.
+ */
+export function memoSearchPattern(memo: string): string {
+  // Every POSIX ERE metacharacter; Postgres ARE treats a backslashed
+  // punctuation character as ordinary, so this makes the memo a pure literal.
+  return memo.replace(/[.^$*+?()[\]{}|\\]/g, '\\$&')
 }
 
 /** Fetch recent transactions with memo matching search string for rule-based category suggestions. */
@@ -98,19 +111,18 @@ export async function fetchMemoHistory(
 
   const { data, error } = await supabase
     .from('transactions')
-    .select('category_id, type, memo, txn_date')
+    .select('category_id, memo')
     .eq('ledger_id', ledgerId)
     .not('memo', 'is', null)
-    .ilike('memo', `%${trimmed}%`)
+    .filter('memo', 'imatch', memoSearchPattern(trimmed))
     .order('txn_date', { ascending: false })
+    .order('id', { ascending: false })
     .limit(limit)
 
   if (error) throw error
   return (data ?? []).map((row) => ({
     categoryId: row.category_id,
-    type: row.type as FundType,
     memo: row.memo,
-    txnDate: row.txn_date,
   }))
 }
 

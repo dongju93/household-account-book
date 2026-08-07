@@ -85,6 +85,8 @@ export const AI_LIMITS = {
   periodExplain: {
     periodKeyMax: 32,
     monthsMax: 12,
+    topCategoriesMax: 5,
+    topCategoriesNameMax: 40,
   },
   monthCloseNarrative: {
     findingsMax: 40,

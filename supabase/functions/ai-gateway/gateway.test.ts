@@ -14,7 +14,12 @@ import {
   TOKEN_ESTIMATE,
 } from './config.ts'
 import { handleAiGateway, type GatewayDeps } from './gateway.ts'
-import { parseGatewayBody, validateFeatureResult, validateGatewayEnvelope } from './validate.ts'
+import {
+  parseGatewayBody,
+  validateFeatureInput,
+  validateFeatureResult,
+  validateGatewayEnvelope,
+} from './validate.ts'
 import { XaiError } from './xai.ts'
 
 const LEDGER = '11111111-1111-4111-8111-111111111111'
@@ -404,6 +409,55 @@ describe('validate envelope', () => {
     const raw = 'x'.repeat(100)
     const r = parseGatewayBody(raw, RAW_BODY_MAX_BYTES + 10, RAW_BODY_MAX_BYTES)
     expect(r.ok).toBe(false)
+  })
+})
+
+describe('validateFeatureInput period_explain', () => {
+  const baseInput = {
+    periodKey: '3m:2026-03_2026-05',
+    months: [{ month: '2026-03', income: 1, expense: 1, saving: 0, investment: 0, balance: 0 }],
+  }
+
+  it('rejects empty months', () => {
+    const r = validateFeatureInput('period_explain', { ...baseInput, months: [] })
+    expect(r.ok).toBe(false)
+  })
+
+  it('accepts input without topCategories', () => {
+    const r = validateFeatureInput('period_explain', baseInput)
+    expect(r.ok).toBe(true)
+  })
+
+  it('rejects more than 5 topCategories', () => {
+    const topCategories = Array.from({ length: 6 }, (_, i) => ({
+      name: `cat-${i}`,
+      amount: 1000,
+      pct: 10,
+    }))
+    const r = validateFeatureInput('period_explain', { ...baseInput, topCategories })
+    expect(r.ok).toBe(false)
+  })
+
+  it('rejects malformed topCategories items', () => {
+    const r = validateFeatureInput('period_explain', {
+      ...baseInput,
+      topCategories: [{ name: '', amount: 1000, pct: 10 }],
+    })
+    expect(r.ok).toBe(false)
+  })
+
+  it('accepts a 40-char name but rejects a longer one (categories.name is 1..40)', () => {
+    const ok = validateFeatureInput('period_explain', {
+      ...baseInput,
+      topCategories: [{ name: 'ㄱ'.repeat(40), amount: 1000, pct: 10 }],
+    })
+    expect(ok.ok).toBe(true)
+
+    const tooLong = validateFeatureInput('period_explain', {
+      ...baseInput,
+      topCategories: [{ name: 'ㄱ'.repeat(41), amount: 1000, pct: 10 }],
+    })
+    expect(tooLong.ok).toBe(false)
   })
 })
 
