@@ -3,11 +3,15 @@ import { useState } from 'react'
 import { useAsyncData } from '../../app/useAsyncData'
 import { useRefresh } from '../../app/useRefresh'
 import { listCategories, reorderCategories, setCategoryActive } from '../../data/categories'
+import {
+  suggestCategoryBudgets,
+  type CategoryBudgetSuggestion,
+} from '../../domain/budgetSuggestions'
 import { fundTypeLabel } from '../../domain/fundType'
-import type { Category } from '../../domain/types'
+import type { Category, Transaction } from '../../domain/types'
 import { Glyph, IconButton, Pill, Toggle, Won } from '../../ui'
 import { glyphForCategory } from '../../ui/glyphForCategory'
-import { CategoryFormSheet } from './CategoryFormSheet'
+import { type CategoryFormTarget, CategoryFormSheet } from './CategoryFormSheet'
 import { SettingsSection } from './SettingsSection'
 import { useManagedList } from './useManagedList'
 
@@ -23,14 +27,30 @@ import { useManagedList } from './useManagedList'
  *   the toggle, so "open the editor" and "deactivate" stop competing for the
  *   same pixels.
  */
-export function CategoryManager({ ledgerId, canManage }: { ledgerId: string; canManage: boolean }) {
+export function CategoryManager({
+  ledgerId,
+  canManage,
+  historyTransactions = [],
+  historyMonthKeys = [],
+}: {
+  ledgerId: string
+  canManage: boolean
+  historyTransactions?: readonly Transaction[]
+  historyMonthKeys?: readonly string[]
+}) {
   const { refresh } = useRefresh()
   const { data, loading, error, reload } = useAsyncData(() => listCategories(ledgerId), [ledgerId])
-  const [editing, setEditing] = useState<Category | null>(null)
+  const [formTarget, setFormTarget] = useState<CategoryFormTarget>({ kind: 'create' })
   const { sheetOpen, setSheetOpen, actionError, openCreate, closeSheet, afterMutation, run } =
     useManagedList(refresh)
 
   const categories = data ?? []
+  const budgetSuggestions = canManage
+    ? suggestCategoryBudgets(historyTransactions, categories, historyMonthKeys)
+    : []
+  const budgetSuggestionByCategory = new Map<string, CategoryBudgetSuggestion>(
+    budgetSuggestions.map((suggestion) => [suggestion.categoryId, suggestion]),
+  )
 
   async function move(index: number, dir: -1 | 1) {
     const next = [...categories]
@@ -47,7 +67,7 @@ export function CategoryManager({ ledgerId, canManage }: { ledgerId: string; can
         description="거래를 분류하는 항목입니다. 순서는 입력 화면의 칩 순서와 같습니다."
         canAdd={canManage}
         onAdd={() => {
-          setEditing(null)
+          setFormTarget({ kind: 'create' })
           openCreate()
         }}
         actionError={actionError}
@@ -102,7 +122,7 @@ export function CategoryManager({ ledgerId, canManage }: { ledgerId: string; can
               type="button"
               onClick={() => {
                 if (canManage) {
-                  setEditing(c)
+                  setFormTarget({ kind: 'edit', category: c })
                   setSheetOpen(true)
                 }
               }}
@@ -137,7 +157,14 @@ export function CategoryManager({ ledgerId, canManage }: { ledgerId: string; can
           open={sheetOpen}
           onClose={closeSheet}
           ledgerId={ledgerId}
-          category={editing}
+          target={
+            formTarget.kind === 'edit'
+              ? {
+                  ...formTarget,
+                  budgetSuggestion: budgetSuggestionByCategory.get(formTarget.category.id) ?? null,
+                }
+              : formTarget
+          }
           onSaved={() => afterMutation(reload)}
         />
       )}

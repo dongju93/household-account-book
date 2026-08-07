@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { useValidatedSubmit } from '../../app/useValidatedSubmit'
 import { createCategory, updateCategory } from '../../data/categories'
+import type { CategoryBudgetSuggestion } from '../../domain/budgetSuggestions'
 import type { FundType } from '../../domain/fundType'
 import { FUND_TYPE_ITEMS, fundTypeLabel, hasBudget, hasGoal } from '../../domain/fundType'
 import type { Category } from '../../domain/types'
@@ -16,6 +17,7 @@ import {
   Segmented,
   TextInput,
   Toggle,
+  Won,
 } from '../../ui'
 import {
   ALL_GLYPH_KEYS,
@@ -24,20 +26,32 @@ import {
   glyphForCategory,
 } from '../../ui/glyphForCategory'
 
+export type CategoryFormTarget = { kind: 'create' } | { kind: 'edit'; category: Category }
+
+type CategoryFormMode =
+  | { kind: 'create' }
+  | {
+      kind: 'edit'
+      category: Category
+      budgetSuggestion: CategoryBudgetSuggestion | null
+    }
+
 export function CategoryFormSheet({
   open,
   onClose,
   ledgerId,
-  category,
+  target,
   onSaved,
 }: {
   open: boolean
   onClose: () => void
   ledgerId: string
-  category: Category | null // null = create
+  target: CategoryFormMode
   onSaved: () => void
 }) {
-  const editing = category !== null
+  const editing = target.kind === 'edit'
+  const category = editing ? target.category : null
+  const budgetSuggestion = editing ? target.budgetSuggestion : null
   const [type, setType] = useState<FundType>(category?.type ?? 'expense')
   const [name, setName] = useState(category?.name ?? '')
   const [icon, setIcon] = useState<GlyphKey>(
@@ -66,8 +80,8 @@ export function CategoryFormSheet({
           value.budgetAmount > 0 &&
           showBudgetPace
 
-        if (editing) {
-          await updateCategory(category.id, {
+        if (target.kind === 'edit') {
+          await updateCategory(target.category.id, {
             name: value.name,
             icon,
             budgetAmount: value.budgetAmount,
@@ -154,6 +168,51 @@ export function CategoryFormSheet({
             <Field label="예산 (월)" error={errors.budgetAmount}>
               <AmountInput value={budget} onChange={setBudget} />
             </Field>
+            {budgetSuggestion && (
+              <section
+                aria-label="예산 제안"
+                className="rounded-surface border border-line bg-fill1 px-3 py-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-body font-semibold text-ink">예산 제안</p>
+                    <p className="text-caption mt-0.5 text-ink2 text-pretty">
+                      최근 월별 지출 중앙값에 10% 여유를 더해 1만원 단위로 올린 참고용 금액입니다.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setBudget(String(budgetSuggestion.suggestedAmount))}
+                    className="pressable text-caption min-h-12 flex-none rounded-control border border-line bg-paper px-3 font-semibold text-ink enabled:hover:bg-fill2"
+                  >
+                    제안 금액 입력
+                  </button>
+                </div>
+                <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <dt className="text-micro text-ink3">현재</dt>
+                    <dd className="text-caption mt-0.5 text-ink2">
+                      <Won value={budgetSuggestion.currentAmount} />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-micro text-ink3">제안</dt>
+                    <dd className="text-caption mt-0.5 font-semibold text-ink">
+                      <Won value={budgetSuggestion.suggestedAmount} />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-micro text-ink3">증감</dt>
+                    <dd className="text-caption mt-0.5 text-ink2">
+                      <Won value={budgetSuggestion.difference} withSign />
+                    </dd>
+                  </div>
+                </dl>
+                <p className="text-caption mt-2 text-ink2">
+                  입력 후에도 아래 저장을 눌러야 실제 예산에 적용됩니다.
+                </p>
+              </section>
+            )}
             <div className="flex items-start justify-between gap-3 rounded-surface border border-line bg-paper px-3 py-2.5">
               <div className="min-w-0">
                 <p className="text-body font-semibold text-ink">예산 페이스 표시</p>

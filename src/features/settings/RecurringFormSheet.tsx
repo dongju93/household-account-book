@@ -4,9 +4,10 @@ import { useValidatedSubmit } from '../../app/useValidatedSubmit'
 import { createRecurring, updateRecurring } from '../../data/recurring'
 import type { FundType } from '../../domain/fundType'
 import { FUND_TYPE_ITEMS } from '../../domain/fundType'
+import type { RecurringSuggestion } from '../../domain/recurringSuggestions'
 import type { Category, RecurringItem } from '../../domain/types'
 import { validateRecurringInput } from '../../domain/validation'
-import { currentYearMonth, monthKey } from '../../lib/month'
+import { addMonths, currentYearMonth, monthKey } from '../../lib/month'
 import {
   AmountInput,
   BottomSheet,
@@ -18,34 +19,52 @@ import {
   TextInput,
 } from '../../ui'
 
+export type RecurringFormTarget =
+  | { kind: 'create' }
+  | { kind: 'suggestion'; suggestion: RecurringSuggestion }
+  | { kind: 'edit'; item: RecurringItem }
+
 export function RecurringFormSheet({
   open,
   onClose,
   ledgerId,
-  item,
+  target,
   categories,
   onSaved,
 }: {
   open: boolean
   onClose: () => void
   ledgerId: string
-  item: RecurringItem | null
+  target: RecurringFormTarget
   categories: Category[] // active categories
   onSaved: () => void
 }) {
-  const editing = item !== null
+  const editing = target.kind === 'edit'
+  const item = editing ? target.item : null
+  const suggestion = target.kind === 'suggestion' ? target.suggestion : null
   const nowYm = currentYearMonth()
+  const suggestionStartYm = addMonths(nowYm, 1)
 
-  const [type, setType] = useState<FundType>(item?.type ?? 'expense')
-  const [categoryId, setCategoryId] = useState<string>(item?.categoryId ?? '')
-  const [name, setName] = useState(item?.name ?? '')
-  const [amount, setAmount] = useState(item ? String(item.amount) : '')
+  const [type, setType] = useState<FundType>(item?.type ?? suggestion?.type ?? 'expense')
+  const [categoryId, setCategoryId] = useState<string>(
+    item?.categoryId ?? suggestion?.categoryId ?? '',
+  )
+  const [name, setName] = useState(item?.name ?? suggestion?.name ?? '')
+  const [amount, setAmount] = useState(
+    item ? String(item.amount) : suggestion ? String(suggestion.amount) : '',
+  )
   const [startMonth, setStartMonth] = useState(
-    item ? item.startMonth.slice(0, 7) : monthKey(nowYm.year, nowYm.month),
+    item
+      ? item.startMonth.slice(0, 7)
+      : suggestion
+        ? monthKey(suggestionStartYm.year, suggestionStartYm.month)
+        : monthKey(nowYm.year, nowYm.month),
   )
   const [endMonth, setEndMonth] = useState(item?.endMonth ? item.endMonth.slice(0, 7) : '')
-  const [dayOfMonth, setDayOfMonth] = useState(item ? String(item.dayOfMonth) : '1')
-  const [memo, setMemo] = useState(item?.memo ?? '')
+  const [dayOfMonth, setDayOfMonth] = useState(
+    item ? String(item.dayOfMonth) : suggestion ? String(suggestion.dayOfMonth) : '1',
+  )
+  const [memo, setMemo] = useState(item?.memo ?? suggestion?.memo ?? '')
   const { errors, submitError, saving, run } = useValidatedSubmit()
 
   const typeCategories = categories.filter((c) => c.type === type)
@@ -78,7 +97,7 @@ export function RecurringFormSheet({
           dayOfMonth: value.dayOfMonth,
           memo: value.memo,
         }
-        if (editing) await updateRecurring(item.id, ledgerId, write)
+        if (target.kind === 'edit') await updateRecurring(target.item.id, ledgerId, write)
         else await createRecurring(ledgerId, write)
         onSaved()
       },
@@ -89,11 +108,17 @@ export function RecurringFormSheet({
     <BottomSheet
       open={open}
       onClose={onClose}
-      title={editing ? '고정 항목 수정' : '고정 항목 추가'}
+      title={editing ? '고정 항목 수정' : suggestion ? '고정 항목 초안 확인' : '고정 항목 추가'}
     >
       {/* BottomSheet now owns the max height and the scroll, so this no longer
           nests a second scroll container inside one that already scrolls. */}
       <div className="flex flex-col gap-4">
+        {suggestion && (
+          <p role="status" className="text-caption rounded-surface bg-fill1 px-3 py-2.5 text-ink2">
+            반복 기록으로 만든 참고용 초안입니다. 중복 생성을 피하도록 다음 달부터 시작하며, 저장을
+            눌러야 고정 항목이 만들어집니다.
+          </p>
+        )}
         <Field label="구분">
           <Segmented
             label="자금 구분"
