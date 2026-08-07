@@ -1,32 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
-const { from, calls, setResult } = vi.hoisted(() => {
+const { rpc, calls, setResult } = vi.hoisted(() => {
   const calls: Array<{ method: string; args: unknown[] }> = []
   let result: { data: unknown; error: unknown } = { data: [], error: null }
 
   // Minimal PostgREST builder double: every method records its call and returns
-  // the builder. `limit` is the terminal call in every chain under test, so it
-  // resolves the result — keeping the builder itself non-thenable.
+  // the builder. `rpc` is the terminal call in fetchMemoHistory, so it resolves
+  // the result.
   const builder: Record<string, unknown> = {
-    limit: (...args: unknown[]) => {
-      calls.push({ method: 'limit', args })
+    rpc: (...args: unknown[]) => {
+      calls.push({ method: 'rpc', args })
       return Promise.resolve(result)
     },
   }
-  for (const method of ['select', 'eq', 'not', 'filter', 'order']) {
-    builder[method] = (...args: unknown[]) => {
-      calls.push({ method, args })
-      return builder
-    }
-  }
-
-  const from = vi.fn((table: string) => {
-    calls.push({ method: 'from', args: [table] })
-    return builder
-  })
 
   return {
-    from,
+    rpc: vi.fn(builder.rpc as (...args: unknown[]) => Promise<typeof result>),
     calls,
     setResult: (r: { data: unknown; error: unknown }) => {
       result = r
@@ -34,9 +23,9 @@ const { from, calls, setResult } = vi.hoisted(() => {
   }
 })
 
-vi.mock('../lib/supabase', () => ({ supabase: { from } }))
+vi.mock('../lib/supabase', () => ({ supabase: { rpc } }))
 
-import { fetchMemoHistory, memoSearchPattern } from './transactions'
+import { fetchMemoHistory } from './transactions'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -44,47 +33,34 @@ beforeEach(() => {
   setResult({ data: [], error: null })
 })
 
-describe('memoSearchPattern', () => {
-  it('escapes the POSIX ERE metacharacters that would otherwise act as a pattern', () => {
-    expect(memoSearchPattern('3*4')).toBe('3\\*4')
-    expect(memoSearchPattern('a.b')).toBe('a\\.b')
-    expect(memoSearchPattern('(주)한빛')).toBe('\\(주\\)한빛')
-    expect(memoSearchPattern('c:\\tmp')).toBe('c:\\\\tmp')
-    expect(memoSearchPattern('^시작$')).toBe('\\^시작\\$')
-  })
-
-  it('leaves LIKE metacharacters alone — they are ordinary to a regex', () => {
-    expect(memoSearchPattern('50% 할인')).toBe('50% 할인')
-    expect(memoSearchPattern('a_b')).toBe('a_b')
-  })
-
-  it('leaves ordinary memo text untouched', () => {
-    expect(memoSearchPattern('스타벅스 아메리카노')).toBe('스타벅스 아메리카노')
-  })
-})
-
 describe('fetchMemoHistory', () => {
-  it('searches with an escaped imatch pattern instead of ilike', async () => {
-    setResult({ data: [{ category_id: 'c-food', memo: '3*4 커피' }], error: null })
+  it('calls the search_memo_history RPC with the trimmed memo and both-direction matching is the RPC contract', async () => {
+    setResult({ data: [{ category_id: 'c-food', memo: '스타벅스' }], error: null })
 
-    const rows = await fetchMemoHistory('led-1', '  3*4  ')
+    const rows = await fetchMemoHistory('led-1', '  스타벅스 강남점  ')
 
-    expect(calls).toContainEqual({ method: 'filter', args: ['memo', 'imatch', '3\\*4'] })
-    expect(calls.some((c) => c.method === 'ilike')).toBe(false)
-    expect(rows).toEqual([{ categoryId: 'c-food', memo: '3*4 커피' }])
+    expect(rpc).toHaveBeenCalledWith('search_memo_history', {
+      p_ledger: 'led-1',
+      p_memo: '스타벅스 강남점',
+      p_limit: 50,
+    })
+    expect(rows).toEqual([{ categoryId: 'c-food', memo: '스타벅스' }])
   })
 
-  it('orders by (txn_date, id) so the limit truncates deterministically', async () => {
-    await fetchMemoHistory('led-1', '커피')
+  it('passes the custom limit through as p_limit', async () => {
+    await fetchMemoHistory('led-1', '커피', 10)
 
-    const orders = calls.filter((c) => c.method === 'order').map((c) => c.args[0])
-    expect(orders).toEqual(['txn_date', 'id'])
+    expect(rpc).toHaveBeenCalledWith('search_memo_history', {
+      p_ledger: 'led-1',
+      p_memo: '커피',
+      p_limit: 10,
+    })
   })
 
   it('returns [] without querying when the ledger or memo is empty', async () => {
     expect(await fetchMemoHistory('', '커피')).toEqual([])
     expect(await fetchMemoHistory('led-1', '   ')).toEqual([])
-    expect(from).not.toHaveBeenCalled()
+    expect(rpc).not.toHaveBeenCalled()
   })
 
   it('throws when PostgREST returns an error', async () => {

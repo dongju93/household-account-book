@@ -87,21 +87,20 @@ export interface MemoHistoryItem {
 }
 
 /**
- * Escape a user memo for use as a Postgres `~*` (imatch) pattern.
+ * Fetch recent transactions whose memo matches the draft in EITHER substring
+ * direction — "stored contains new" (`스타벅스 강남점` ⊃ `스타벅스`) or "new
+ * contains stored" (`스타벅스` ⊂ `스타벅스 강남점`). The domain matcher
+ * `suggestCategoriesFromMemo` already handles either-side matches; this query
+ * must surface rows for both so the matcher actually sees them.
  *
- * `ilike` is unusable here: PostgREST rewrites every `*` in a like/ilike value
- * into `%` before Postgres ever sees it, and the rewrite is a blind character
- * map — sending `\*` yields `\%` (a literal percent), so a literal `*` simply
- * cannot be expressed. `imatch` passes the value through untouched, and an
- * unanchored `~*` already means "contains", so no surrounding wildcards.
+ * The reverse direction ("new contains stored") cannot be expressed through
+ * PostgREST — `ilike`/`imatch` always place the column on the left, so the
+ * stored value can never be the haystack for the draft as pattern — so the
+ * matching runs in the `search_memo_history` RPC (migration 0014), which uses
+ * case-insensitive `strpos` on the lowercased pair for both directions (plain
+ * substring, never a regex with the column as pattern, so stored memo
+ * metacharacters stay literal). Read-only: returns rows; never gates a write.
  */
-export function memoSearchPattern(memo: string): string {
-  // Every POSIX ERE metacharacter; Postgres ARE treats a backslashed
-  // punctuation character as ordinary, so this makes the memo a pure literal.
-  return memo.replace(/[.^$*+?()[\]{}|\\]/g, '\\$&')
-}
-
-/** Fetch recent transactions with memo matching search string for rule-based category suggestions. */
 export async function fetchMemoHistory(
   ledgerId: string,
   memo: string,
@@ -110,18 +109,14 @@ export async function fetchMemoHistory(
   const trimmed = memo.trim()
   if (!trimmed || !ledgerId) return []
 
-  const { data, error } = await supabase
-    .from('transactions')
-    .select('category_id, memo')
-    .eq('ledger_id', ledgerId)
-    .not('memo', 'is', null)
-    .filter('memo', 'imatch', memoSearchPattern(trimmed))
-    .order('txn_date', { ascending: false })
-    .order('id', { ascending: false })
-    .limit(limit)
+  const { data, error } = await supabase.rpc('search_memo_history', {
+    p_ledger: ledgerId,
+    p_memo: trimmed,
+    p_limit: limit,
+  })
 
   if (error) throw error
-  return (data ?? []).map((row) => ({
+  return ((data ?? []) as Array<{ category_id: string; memo: string | null }>).map((row) => ({
     categoryId: row.category_id,
     memo: row.memo,
   }))
