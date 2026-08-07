@@ -21,6 +21,7 @@ import {
   Toggle,
 } from '../../ui'
 import { NlDraftField } from './NlDraftField'
+import { useMemoCategorySuggestions } from './useMemoCategorySuggestions'
 
 /**
  * Create or edit a transaction. In create mode it offers 저장 후 계속 입력, which
@@ -58,6 +59,13 @@ export function TransactionSheet({
   const amountErrorId = useId()
   const categoryErrorId = useId()
   const dateErrorId = useId()
+
+  const { suggestions } = useMemoCategorySuggestions({
+    ledgerId,
+    memo,
+    categories,
+    enabled: open,
+  })
 
   const typeCategories = categories.filter((c) => c.type === type)
 
@@ -156,6 +164,39 @@ export function TransactionSheet({
 
         <div className="flex flex-col gap-1.5">
           <span className="text-caption font-semibold text-ink2">카테고리</span>
+          {suggestions.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 rounded-control bg-fill1 px-2.5 py-1.5 text-caption">
+              <span className="font-semibold text-ink2">추천:</span>
+              {suggestions.map((s) => (
+                <Chip
+                  key={s.categoryId}
+                  active={s.categoryId === categoryId}
+                  density="compact"
+                  onClick={() => {
+                    if (s.type !== type) {
+                      setType(s.type)
+                    }
+                    setCategoryId(s.categoryId)
+                  }}
+                >
+                  {s.categoryName}
+                  {s.type !== type && (
+                    <span className="ml-1 text-[10px] opacity-75">
+                      (
+                      {s.type === 'income'
+                        ? '수입'
+                        : s.type === 'expense'
+                          ? '지출'
+                          : s.type === 'saving'
+                            ? '저축'
+                            : '투자'}
+                      )
+                    </span>
+                  )}
+                </Chip>
+              ))}
+            </div>
+          )}
           {typeCategories.length === 0 ? (
             <p className="text-caption text-ink2">
               이 구분의 활성 카테고리가 없습니다. 설정에서 추가하세요.

@@ -16,6 +16,7 @@ vi.mock('../../data/aiSettings', () => ({
 vi.mock('../../data/transactions', () => ({
   createTransaction: vi.fn(),
   updateTransaction: vi.fn(),
+  fetchMemoHistory: vi.fn().mockResolvedValue([]),
 }))
 vi.mock('../../ai/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../ai/client')>()
@@ -24,12 +25,13 @@ vi.mock('../../ai/client', async (importOriginal) => {
 
 import { invokeAiFeature } from '../../ai/client'
 import { getAiUserSettings } from '../../data/aiSettings'
-import { createTransaction } from '../../data/transactions'
+import { createTransaction, fetchMemoHistory } from '../../data/transactions'
 import { TransactionSheet } from './TransactionSheet'
 
 const mockedInvoke = vi.mocked(invokeAiFeature)
 const mockedSettings = vi.mocked(getAiUserSettings)
 const mockedCreate = vi.mocked(createTransaction)
+const mockedMemoHistory = vi.mocked(fetchMemoHistory)
 
 const USER_ID = 'user-1'
 const LEDGER_ID = 'ledger-1'
@@ -192,5 +194,31 @@ describe('TransactionSheet NL draft field (S05 / PR-5)', () => {
     // Amount stays empty — the user must fill it in; no write happened.
     expect(screen.getByPlaceholderText('0')).toHaveValue('')
     expect(mockedCreate).not.toHaveBeenCalled()
+  })
+})
+
+describe('TransactionSheet Memo category suggestion (S09 / PR-10)', () => {
+  it('shows recommendation chip after debounced memo typing and sets category on tap', async () => {
+    const user = userEvent.setup()
+    mockedMemoHistory.mockResolvedValue([
+      { categoryId: 'c-food', type: 'expense', memo: '스타벅스', txnDate: '2026-08-01' },
+    ])
+    renderSheet()
+
+    const memoInput = screen.getByPlaceholderText('메모')
+    await user.type(memoInput, '스타벅스')
+
+    // Debounce wait
+    await waitFor(() => {
+      expect(screen.getByText('추천:')).toBeInTheDocument()
+      expect(screen.getAllByRole('button', { name: '식비' })).toHaveLength(2)
+    })
+
+    // Click recommendation chip (the first '식비' button inside 추천 container)
+    const recChip = screen.getByText('추천:').parentElement!
+    await user.click(recChip.querySelector('button')!)
+
+    // Verification: LLM/quota call was NEVER made during category suggestion
+    expect(mockedInvoke).not.toHaveBeenCalled()
   })
 })

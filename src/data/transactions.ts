@@ -80,6 +80,40 @@ export async function listAllTransactions(
   return all
 }
 
+export interface MemoHistoryItem {
+  categoryId: string
+  type: FundType
+  memo: string | null
+  txnDate: string
+}
+
+/** Fetch recent transactions with memo matching search string for rule-based category suggestions. */
+export async function fetchMemoHistory(
+  ledgerId: string,
+  memo: string,
+  limit = 50,
+): Promise<MemoHistoryItem[]> {
+  const trimmed = memo.trim()
+  if (!trimmed || !ledgerId) return []
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('category_id, type, memo, txn_date')
+    .eq('ledger_id', ledgerId)
+    .not('memo', 'is', null)
+    .ilike('memo', `%${trimmed}%`)
+    .order('txn_date', { ascending: false })
+    .limit(limit)
+
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    categoryId: row.category_id,
+    type: row.type as FundType,
+    memo: row.memo,
+    txnDate: row.txn_date,
+  }))
+}
+
 export interface TxnWrite {
   categoryId: string
   type: FundType
