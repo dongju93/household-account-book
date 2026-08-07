@@ -7,6 +7,15 @@ import {
 } from '../../domain/memoCategorySuggestions'
 import type { Category } from '../../domain/types'
 
+const NO_SUGGESTIONS: SuggestedCategory[] = []
+
+/** A resolved result, tagged with the query it describes. */
+type Resolved = {
+  ledgerId: string
+  memo: string
+  suggestions: SuggestedCategory[]
+}
+
 export function useMemoCategorySuggestions({
   ledgerId,
   memo,
@@ -18,11 +27,11 @@ export function useMemoCategorySuggestions({
   categories: Category[]
   enabled?: boolean
 }): { suggestions: SuggestedCategory[] } {
-  const [suggestions, setSuggestions] = useState<SuggestedCategory[]>([])
+  const [resolved, setResolved] = useState<Resolved | null>(null)
 
   useEffect(() => {
     if (!enabled || !ledgerId || !memo.trim()) {
-      setSuggestions([])
+      setResolved(null)
       return
     }
 
@@ -33,11 +42,19 @@ export function useMemoCategorySuggestions({
       try {
         const history = await fetchMemoHistory(ledgerId, memo)
         if (cancelled) return
-        setSuggestions(suggestCategoriesFromMemo(memo, categories, history))
+        setResolved({
+          ledgerId,
+          memo,
+          suggestions: suggestCategoriesFromMemo(memo, categories, history),
+        })
       } catch {
         if (cancelled) return
         // Fallback to name matching if history fetch fails
-        setSuggestions(suggestCategoriesFromMemo(memo, categories, []))
+        setResolved({
+          ledgerId,
+          memo,
+          suggestions: suggestCategoriesFromMemo(memo, categories, []),
+        })
       }
     }, 400)
 
@@ -47,5 +64,14 @@ export function useMemoCategorySuggestions({
     }
   }, [ledgerId, memo, categories, enabled])
 
-  return { suggestions }
+  // Suggestions describe a specific memo, so they are only shown while that memo
+  // is still the one in the form. Typing over a memo therefore hides the chips
+  // immediately — through the debounce and the in-flight fetch — instead of
+  // leaving the previous memo's categories clickable against a new transaction.
+  // Deriving this (rather than clearing state in the effect) also avoids the
+  // frame of stale chips that a post-paint effect would allow.
+  const fresh =
+    enabled && resolved !== null && resolved.ledgerId === ledgerId && resolved.memo === memo
+
+  return { suggestions: fresh ? resolved.suggestions : NO_SUGGESTIONS }
 }

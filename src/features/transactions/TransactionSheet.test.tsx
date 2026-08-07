@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
@@ -238,6 +238,39 @@ describe('TransactionSheet Memo category suggestion (S09 / PR-10)', () => {
 
     // Verification: LLM/quota call was NEVER made during category suggestion
     expect(mockedInvoke).not.toHaveBeenCalled()
+  })
+
+  it('hides the previous memo chips while the replacement query is pending', async () => {
+    const user = userEvent.setup()
+    // '스타벅스' resolves immediately; every later memo stays in flight until the
+    // test releases it, so the assertions run inside the stale window.
+    const pending = new Map<string, (rows: { categoryId: string; memo: string }[]) => void>()
+    mockedMemoHistory.mockImplementation((_ledgerId: string, memo: string) =>
+      memo === '스타벅스'
+        ? Promise.resolve([{ categoryId: 'c-food', memo }])
+        : new Promise((resolve) => pending.set(memo, resolve)),
+    )
+    renderSheet()
+
+    const memoInput = screen.getByPlaceholderText('메모')
+    await user.type(memoInput, '스타벅스')
+    await screen.findByText('추천:')
+
+    // Keep typing: the memo goes nonblank -> nonblank with no empty value in
+    // between, which is the case the blank-memo reset does not cover.
+    await user.type(memoInput, '월세')
+    expect(screen.queryByText('추천:')).not.toBeInTheDocument()
+
+    // ...and they stay hidden while the new request is in flight.
+    await waitFor(() => expect(pending.has('스타벅스월세')).toBe(true))
+    expect(screen.queryByText('추천:')).not.toBeInTheDocument()
+
+    // Same category as before — so its reappearance is caused by the new result
+    // landing, not by the old state having survived.
+    await act(async () => {
+      pending.get('스타벅스월세')!([{ categoryId: 'c-food', memo: '스타벅스월세' }])
+    })
+    await screen.findByText('추천:')
   })
 })
 
