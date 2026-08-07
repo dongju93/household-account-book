@@ -36,6 +36,21 @@ function isMonthKey(value: string): boolean {
   return /^\d{4}-(0[1-9]|1[0-2])$/.test(value)
 }
 
+function calendarMonthKey(value: string, timeZone?: string): string | null {
+  const instant = new Date(value)
+  if (Number.isNaN(instant.getTime())) return null
+
+  const parts = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    timeZone,
+  }).formatToParts(instant)
+  const year = parts.find((part) => part.type === 'year')?.value
+  const month = parts.find((part) => part.type === 'month')?.value
+  const key = year && month ? `${year}-${month}` : ''
+  return isMonthKey(key) ? key : null
+}
+
 function median(values: readonly number[]): number {
   const sorted = [...values].sort((a, b) => a - b)
   const middle = Math.floor(sorted.length / 2)
@@ -61,6 +76,7 @@ export function suggestCategoryBudgets(
   transactions: readonly BudgetSuggestionTxn[],
   categories: readonly BudgetSuggestionCategory[],
   monthKeys: readonly string[],
+  calendarTimeZone?: string,
 ): CategoryBudgetSuggestion[] {
   const months = [...new Set(monthKeys.filter(isMonthKey))].sort()
   if (months.length < MIN_BUDGET_HISTORY_MONTHS) return []
@@ -83,7 +99,7 @@ export function suggestCategoryBudgets(
 
   for (const category of categories) {
     if (!category.isActive || category.type !== 'expense') continue
-    const createdMonth = /^\d{4}-\d{2}/.exec(category.createdAt)?.[0] ?? null
+    const createdMonth = calendarMonthKey(category.createdAt, calendarTimeZone)
     // The creation month may be partial, so it is not evidence for a full-month budget.
     const observedMonthKeys = createdMonth ? months.filter((month) => month > createdMonth) : months
     if (observedMonthKeys.length < MIN_BUDGET_HISTORY_MONTHS) continue

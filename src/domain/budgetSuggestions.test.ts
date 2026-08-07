@@ -82,6 +82,19 @@ describe('suggestCategoryBudgets', () => {
     expect(suggestCategoryBudgets(rows, [category({ type: 'saving' })], MONTHS)).toEqual([])
   })
 
+  it("derives the creation month in the user's calendar", () => {
+    const rows = [txn('2026-04', 100_000), txn('2026-05', 100_000), txn('2026-06', 100_000)]
+
+    expect(
+      suggestCategoryBudgets(
+        rows,
+        [category({ createdAt: '2026-03-31T15:30:00Z' })],
+        MONTHS,
+        'Asia/Seoul',
+      ),
+    ).toEqual([])
+  })
+
   it('returns no action when the current budget already equals the proposal', () => {
     const rows = [txn('2026-01', 100_000), txn('2026-02', 100_000), txn('2026-03', 100_000)]
     expect(suggestCategoryBudgets(rows, [category({ budgetAmount: 60_000 })], MONTHS)).toEqual([])
