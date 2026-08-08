@@ -33,8 +33,7 @@ export function isEffectiveInAppAiEnabled(
 }
 
 function mapAiUserSettings(r: Row): AiUserSettings {
-  const disclosureVersion =
-    typeof r.disclosure_version === 'string' ? r.disclosure_version : null
+  const disclosureVersion = typeof r.disclosure_version === 'string' ? r.disclosure_version : null
   return {
     userId: r.user_id,
     inAppAiEnabled: isEffectiveInAppAiEnabled(r.in_app_ai_enabled === true, disclosureVersion),

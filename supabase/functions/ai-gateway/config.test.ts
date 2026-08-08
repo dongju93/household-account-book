@@ -9,6 +9,7 @@ import {
   maxOutputTokensFor,
   parseOpenAIModel,
   parseOpenAIReasoningEffort,
+  requestDeadlineMsFor,
   tokenEstimateFor,
 } from './config.ts'
 
@@ -89,6 +90,30 @@ describe('token budgets', () => {
     for (const effort of OPENAI_REASONING_EFFORTS) {
       expect(tokenEstimateFor('month_insight', effort)).toBeLessThanOrEqual(
         maxOutputTokensFor('month_insight', effort) + VISIBLE_OUTPUT_TOKENS.month_insight,
+      )
+    }
+  })
+})
+
+describe('request deadline', () => {
+  it('grows with effort, like the token budget it has to wait for', () => {
+    // A flat deadline permits a reasoning budget the gateway never waits for:
+    // the call aborts as upstream/timeout after the provider began billing.
+    let previous = 0
+    for (const effort of OPENAI_REASONING_EFFORTS) {
+      const deadline = requestDeadlineMsFor(effort)
+      expect(deadline).toBeGreaterThanOrEqual(previous)
+      previous = deadline
+    }
+    expect(requestDeadlineMsFor('max')).toBeGreaterThan(requestDeadlineMsFor('none'))
+  })
+
+  it('allows at least a second per 500 budgeted output tokens', () => {
+    // Rough floor, not a throughput model: it just fails if someone raises
+    // REASONING_HEADROOM_TOKENS without moving the deadline with it.
+    for (const effort of OPENAI_REASONING_EFFORTS) {
+      expect(requestDeadlineMsFor(effort)).toBeGreaterThanOrEqual(
+        (maxOutputTokensFor('month_insight', effort) / 500) * 1_000,
       )
     }
   })

@@ -1,11 +1,14 @@
 /**
  * OpenAI Responses API with strict structured JSON output.
- * Timeout is 20s and invalid provider output is retried once before failing.
+ *
+ * One effort-derived deadline covers the whole call (`requestDeadlineMsFor`),
+ * and invalid provider output is retried once — with the rejection reason fed
+ * back — only if enough of that deadline is left to finish a second attempt.
  */
 
 import {
   OPENAI_BASE_URL,
-  OPENAI_TIMEOUT_MS,
+  requestDeadlineMsFor,
   type AiFeature,
   type OpenAIModel,
   type OpenAIReasoningEffort,
@@ -63,15 +66,28 @@ export async function callOpenAIStructured(options: {
   reasoningEffort: OpenAIReasoningEffort
   safetyIdentifier: string
   fetchImpl?: FetchLike
-  timeoutMs?: number
+  /** Whole-call wall-clock budget. Defaults to `requestDeadlineMsFor(effort)`. */
+  deadlineMs?: number
+  nowMs?: () => number
 }): Promise<OpenAIResult> {
   const fetchImpl = options.fetchImpl ?? fetch
-  const timeoutMs = options.timeoutMs ?? OPENAI_TIMEOUT_MS
+  const nowMs = options.nowMs ?? Date.now
+  // Deadline defaults from the effort so a caller cannot pair a large reasoning
+  // budget with a deadline too short to ever receive it.
+  const deadlineMs = options.deadlineMs ?? requestDeadlineMsFor(options.reasoningEffort)
+  const deadlineAt = nowMs() + deadlineMs
   const prompt = buildFeaturePrompt(options.feature, options.input)
 
   let lastParseError: Error | null = null
   let billedUsage: OpenAIUsage = { promptTokens: 0, completionTokens: 0 }
   for (let attempt = 0; attempt < 2; attempt++) {
+    const remainingMs = deadlineAt - nowMs()
+    // Budget is for the whole call, not per attempt: a fresh timer on attempt 2
+    // would double the wall clock (and the bill) invisibly to the caller. Out of
+    // time means report the attempt-1 rejection rather than start a call we
+    // cannot wait for.
+    if (remainingMs <= 0) break
+
     const raw = await createResponse({
       fetchImpl,
       apiKey: options.apiKey,
@@ -79,9 +95,12 @@ export async function callOpenAIStructured(options: {
       maxOutputTokens: options.maxOutputTokens,
       reasoningEffort: options.reasoningEffort,
       safetyIdentifier: options.safetyIdentifier,
-      timeoutMs,
+      timeoutMs: remainingMs,
       system: prompt.system,
-      user: prompt.user,
+      // Attempt 2 without the rejection reason is a byte-identical reroll with
+      // the same odds of failing — the checks that survive `strict: true` are
+      // exactly the prose rules JSON Schema cannot express.
+      user: attempt === 0 ? prompt.user : withRejectionNote(prompt.user, lastParseError),
       schemaName: prompt.schemaName,
       schema: prompt.schema,
     })
@@ -112,6 +131,24 @@ export async function callOpenAIStructured(options: {
     reason: 'parse',
     usage: billedUsage,
   })
+}
+
+/**
+ * Append the previous rejection so the retry has a reason to differ.
+ * The note is our own validator text (or a capped `JSON.parse` message), never
+ * caller-supplied, so it cannot smuggle instructions into the prompt.
+ */
+function withRejectionNote(user: string, lastParseError: Error | null): string {
+  const reason = (lastParseError?.message ?? '').slice(0, 200)
+  if (!reason) return user
+  return [
+    user,
+    '',
+    '<previous_attempt_rejected>',
+    `직전 응답은 다음 이유로 거부되었습니다: ${reason}`,
+    '같은 위반을 반복하지 말고, 이 제약을 지켜 처음부터 다시 작성하세요.',
+    '</previous_attempt_rejected>',
+  ].join('\n')
 }
 
 async function createResponse(args: {

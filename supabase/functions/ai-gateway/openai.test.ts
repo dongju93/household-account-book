@@ -165,6 +165,75 @@ describe('OpenAI Responses API boundary', () => {
     })
   })
 
+  it('tells the retry why the previous attempt was rejected', async () => {
+    // The checks that survive `strict: true` are the prose rules JSON Schema
+    // cannot express, so an identical reroll fails at the same rate.
+    const sentUsers: string[] = []
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as {
+        input: Array<{ role: string; content: string }>
+      }
+      sentUsers.push(body.input.find((m) => m.role === 'user')?.content ?? '')
+      return new Response(
+        JSON.stringify({
+          status: 'completed',
+          output: [
+            {
+              type: 'message',
+              // Schema-shaped but domain-invalid: confidence is not in the enum.
+              content: [
+                {
+                  type: 'output_text',
+                  text: JSON.stringify({ ...VALID_RESULT, confidence: 'certain' }),
+                },
+              ],
+            },
+          ],
+          usage: { input_tokens: 30, output_tokens: 7 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      )
+    }
+
+    await expect(callOpenAIStructured(requestOptions(fetchImpl))).rejects.toBeInstanceOf(
+      OpenAIError,
+    )
+
+    expect(sentUsers).toHaveLength(2)
+    expect(sentUsers[0]).not.toContain('previous_attempt_rejected')
+    expect(sentUsers[1]).toContain('previous_attempt_rejected')
+    expect(sentUsers[1]).toContain('confidence는 high|medium|low 여야 합니다.')
+  })
+
+  it('spends one deadline across both attempts instead of restarting the clock', async () => {
+    // A fresh timer on attempt 2 doubles wall clock and bill invisibly.
+    let calls = 0
+    let clock = 0
+    const fetchImpl: typeof fetch = async () => {
+      calls++
+      clock += 30_000 // attempt 1 consumes the whole budget
+      return new Response(
+        JSON.stringify({
+          status: 'completed',
+          output: [{ type: 'message', content: [{ type: 'output_text', text: '{not-json' }] }],
+          usage: { input_tokens: 30, output_tokens: 7 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      )
+    }
+
+    const err = await callOpenAIStructured({
+      ...requestOptions(fetchImpl),
+      deadlineMs: 25_000,
+      nowMs: () => clock,
+    }).catch((e: unknown) => e)
+
+    expect(calls).toBe(1)
+    expect(err).toMatchObject<Partial<OpenAIError>>({ kind: 'parse', reason: 'parse' })
+    // Only the one attempt that actually ran is billed to the user's quota.
+    expect((err as OpenAIError).usage).toEqual({ promptTokens: 30, completionTokens: 7 })
+  })
+
   it('redacts project keys and bearer values from provider error previews', () => {
     expect(redactSecrets('Bearer abc.def sk-proj-secret_value')).toBe(
       'Bearer [redacted] sk-[redacted]',

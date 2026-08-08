@@ -4,7 +4,6 @@
  */
 
 export const RAW_BODY_MAX_BYTES = 32 * 1024
-export const OPENAI_TIMEOUT_MS = 20_000
 export const OPENAI_BASE_URL = 'https://api.openai.com/v1'
 export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 export const CACHE_TRIM_KEEP = 20
@@ -159,6 +158,38 @@ export function maxOutputTokensFor(feature: AiFeature, effort: OpenAIReasoningEf
 /** The only supported way to compute the pre-call quota reservation. */
 export function tokenEstimateFor(feature: AiFeature, effort: OpenAIReasoningEffort): number {
   return TOKEN_ESTIMATE[feature] + REASONING_ESTIMATE_TOKENS[effort]
+}
+
+/**
+ * Wall-clock budget for one `callOpenAIStructured` call, per effort.
+ *
+ * The deadline belongs to the same decision as `REASONING_HEADROOM_TOKENS`: a
+ * flat timeout permits a token budget the gateway will never wait for. At
+ * `high` the wire budget is ~16.5k tokens, which no model emits inside 20s, so
+ * every request that actually used its reasoning allowance aborted as
+ * `upstream`/`timeout` after the provider had already started billing.
+ *
+ * This is the budget for the whole call including the parse retry, not per
+ * attempt — see `callOpenAIStructured`.
+ *
+ * Ceiling: Supabase returns 504 if the function has not responded within 150s
+ * (CPU time is capped separately at 2s but excludes time awaiting `fetch`), so
+ * the largest value here must leave room for the auth/quota/cache round trips
+ * around the call — measured at roughly one second.
+ */
+export const REQUEST_DEADLINE_MS: Record<OpenAIReasoningEffort, number> = {
+  none: 20_000,
+  minimal: 25_000,
+  low: 35_000,
+  medium: 50_000,
+  high: 75_000,
+  xhigh: 100_000,
+  max: 120_000,
+}
+
+/** The only supported way to build the request deadline. */
+export function requestDeadlineMsFor(effort: OpenAIReasoningEffort): number {
+  return REQUEST_DEADLINE_MS[effort]
 }
 
 export function isAiFeature(value: unknown): value is AiFeature {
