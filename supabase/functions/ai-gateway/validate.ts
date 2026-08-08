@@ -26,6 +26,18 @@ function isFundType(v: unknown): boolean {
   return typeof v === 'string' && (FUND_TYPES as readonly string[]).includes(v)
 }
 
+/**
+ * Character count as PostgreSQL `length(text)` sees it: code points, not UTF-16
+ * code units. Any limit here that mirrors a DB check constraint must use this —
+ * plain `.length` counts an astral character (emoji) twice, so a name the DB
+ * accepts would be rejected as a validation error. Free-form payload caps that
+ * mirror a client-side HTML `maxlength` should keep using `.length`, since that
+ * attribute counts UTF-16 code units too.
+ */
+function pgCharLength(s: string): number {
+  return Array.from(s).length
+}
+
 /** Parse raw body bytes → envelope; rejects oversize before JSON parse when length known. */
 export function parseGatewayBody(
   rawText: string,
@@ -115,7 +127,8 @@ function validateNlTxnParse(input: unknown): ValidationResult {
   for (const c of categories) {
     if (!isRecord(c)) return fail('category 항목 형식이 올바르지 않습니다.')
     if (typeof c.id !== 'string' || c.id.length === 0) return fail('category.id가 필요합니다.')
-    if (typeof c.name !== 'string' || c.name.length === 0 || c.name.length > 40) {
+    // 40 mirrors the categories.name DB check constraint (length 1..40, code points).
+    if (typeof c.name !== 'string' || c.name.length === 0 || pgCharLength(c.name) > 40) {
       return fail('category.name은 1~40자여야 합니다.')
     }
     if (!isFundType(c.type)) return fail('category.type이 올바르지 않습니다.')
@@ -126,7 +139,8 @@ function validateNlTxnParse(input: unknown): ValidationResult {
 function validateCategorySuggest(input: unknown): ValidationResult {
   if (!isRecord(input)) return fail('category_suggest.input은 객체여야 합니다.')
   const { memo, categories } = input
-  if (typeof memo !== 'string' || memo.length === 0 || memo.length > 200) {
+  // 200 mirrors the transactions.memo DB check constraint (length <= 200, code points).
+  if (typeof memo !== 'string' || memo.length === 0 || pgCharLength(memo) > 200) {
     return fail('memo는 1~200자여야 합니다.')
   }
   if (!Array.isArray(categories) || categories.length === 0 || categories.length > 80) {
@@ -169,8 +183,8 @@ function validatePeriodExplain(input: unknown): ValidationResult {
   if (Array.isArray(topCategories)) {
     for (const c of topCategories) {
       if (!isRecord(c)) return fail('topCategories 항목 형식이 올바르지 않습니다.')
-      // 40 mirrors the categories.name DB check constraint (length 1..40).
-      if (typeof c.name !== 'string' || c.name.length === 0 || c.name.length > 40) {
+      // 40 mirrors the categories.name DB check constraint (length 1..40, code points).
+      if (typeof c.name !== 'string' || c.name.length === 0 || pgCharLength(c.name) > 40) {
         return fail('topCategories.name은 1~40자여야 합니다.')
       }
       if (typeof c.amount !== 'number' || typeof c.pct !== 'number') {

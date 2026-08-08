@@ -459,6 +459,63 @@ describe('validateFeatureInput period_explain', () => {
     })
     expect(tooLong.ok).toBe(false)
   })
+
+  it('counts astral characters like PostgreSQL length(), not UTF-16 units', () => {
+    // 21 emoji = 21 code points (DB-legal under length(name) <= 40) but JS length 42.
+    const emojiName = '🎉'.repeat(21)
+    expect(emojiName.length).toBe(42)
+
+    const ok = validateFeatureInput('period_explain', {
+      ...baseInput,
+      topCategories: [{ name: emojiName, amount: 1000, pct: 10 }],
+    })
+    expect(ok.ok).toBe(true)
+
+    // 41 code points is over the DB limit regardless of encoding.
+    const tooLong = validateFeatureInput('period_explain', {
+      ...baseInput,
+      topCategories: [{ name: '🎉'.repeat(41), amount: 1000, pct: 10 }],
+    })
+    expect(tooLong.ok).toBe(false)
+  })
+})
+
+describe('DB-mirroring length limits count code points', () => {
+  it('nl_txn_parse accepts a 40-code-point emoji category name', () => {
+    const emojiName = '🎉'.repeat(40)
+    expect(emojiName.length).toBe(80)
+
+    const ok = validateFeatureInput('nl_txn_parse', {
+      text: '어제 스타벅스 4500원',
+      today: '2026-07-11',
+      categories: [{ id: 'c1', name: emojiName, type: 'expense' }],
+    })
+    expect(ok.ok).toBe(true)
+
+    const tooLong = validateFeatureInput('nl_txn_parse', {
+      text: '어제 스타벅스 4500원',
+      today: '2026-07-11',
+      categories: [{ id: 'c1', name: '🎉'.repeat(41), type: 'expense' }],
+    })
+    expect(tooLong.ok).toBe(false)
+  })
+
+  it('category_suggest accepts a 200-code-point emoji memo', () => {
+    const emojiMemo = '🎉'.repeat(200)
+    expect(emojiMemo.length).toBe(400)
+
+    const ok = validateFeatureInput('category_suggest', {
+      memo: emojiMemo,
+      categories: [{ id: 'c1', name: '식비', type: 'expense' }],
+    })
+    expect(ok.ok).toBe(true)
+
+    const tooLong = validateFeatureInput('category_suggest', {
+      memo: '🎉'.repeat(201),
+      categories: [{ id: 'c1', name: '식비', type: 'expense' }],
+    })
+    expect(tooLong.ok).toBe(false)
+  })
 })
 
 describe('feature matrix sanity', () => {
