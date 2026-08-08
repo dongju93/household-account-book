@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
@@ -76,7 +76,7 @@ function okResponse(
   }
 }
 
-function renderCard(ready = true, input: PeriodExplainInput = INPUT) {
+function tree(ready: boolean, input: PeriodExplainInput = INPUT) {
   const auth: AuthValue = {
     status: 'authed',
     user: { id: USER_ID } as AuthValue['user'],
@@ -85,14 +85,20 @@ function renderCard(ready = true, input: PeriodExplainInput = INPUT) {
     signUp: async () => ({}),
     signOut: async () => {},
   }
-  return render(
+  return (
     <AuthContext.Provider value={auth}>
       <AiSettingsProvider>
         <AiPeriodExplainCard ledgerId={LEDGER_ID} input={input} ready={ready} />
       </AiSettingsProvider>
-    </AuthContext.Provider>,
+    </AuthContext.Provider>
   )
 }
+
+function renderCard(ready = true, input: PeriodExplainInput = INPUT) {
+  return render(tree(ready, input))
+}
+
+const LOADING = { name: '기간 해설 생성 중…' }
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -146,6 +152,64 @@ describe('AiPeriodExplainCard (S08 / PR-9)', () => {
       input: INPUT,
       dataVersionHash: expect.stringMatching(/^[0-9a-f]{64}$/),
     })
+  })
+
+  it('shows the loading skeleton while the first request is in flight', async () => {
+    let settle!: (res: AiGatewayOkResponse<PeriodExplainResult>) => void
+    mockedInvoke.mockReturnValue(
+      new Promise<AiGatewayOkResponse<PeriodExplainResult>>((resolve) => {
+        settle = resolve
+      }),
+    )
+    renderCard(true)
+
+    // No prior result exists, so the card must still announce progress rather
+    // than staying absent until the provider answers.
+    await screen.findByRole('status', LOADING)
+
+    settle(okResponse({ bullets: ['불릿1'], periodKey: '3m:2026-03_2026-05' }))
+    await screen.findByText('불릿1')
+    expect(screen.queryByRole('status', LOADING)).not.toBeInTheDocument()
+  })
+
+  it('shows the loading skeleton again after ready drops and returns', async () => {
+    mockedInvoke.mockResolvedValue(
+      okResponse({ bullets: ['불릿1'], periodKey: '3m:2026-03_2026-05' }),
+    )
+    const { rerender } = renderCard(true)
+    await screen.findByText('불릿1')
+
+    let settle!: (res: AiGatewayOkResponse<PeriodExplainResult>) => void
+    mockedInvoke.mockReturnValue(
+      new Promise<AiGatewayOkResponse<PeriodExplainResult>>((resolve) => {
+        settle = resolve
+      }),
+    )
+    // A period switch re-fetches the report, so `ready` dips false and back.
+    // The dip lasts a real network round-trip, so let the inactive run settle
+    // before it returns — that resolution is what used to clobber the state.
+    rerender(tree(false))
+    await act(async () => {})
+    rerender(tree(true))
+
+    await screen.findByRole('status', LOADING)
+    settle(okResponse({ bullets: ['불릿2'], periodKey: '3m:2026-03_2026-05' }))
+    await screen.findByText('불릿2')
+  })
+
+  it('stays hidden across a ready dip once flag_off has been seen', async () => {
+    mockedInvoke.mockRejectedValue(new AiClientError('flag_off'))
+    const { rerender } = renderCard(true)
+    await waitFor(() => expect(mockedInvoke).toHaveBeenCalled())
+
+    rerender(tree(false))
+    await act(async () => {})
+    rerender(tree(true))
+
+    // The inactive run must not erase the hide, or the kill switch would flash
+    // a skeleton card on every period switch.
+    expect(screen.queryByRole('status', LOADING)).not.toBeInTheDocument()
+    expect(screen.queryByText('AI 기간 해설')).not.toBeInTheDocument()
   })
 
   it('hides quietly on flag_off', async () => {

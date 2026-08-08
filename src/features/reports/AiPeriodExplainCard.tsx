@@ -29,12 +29,23 @@ export function AiPeriodExplainCard({
   const { enabled } = useAiSettings()
 
   const inputKey = stableStringify(input)
+  // Gates render can decide synchronously. They must stay out of the async
+  // result: a resolved `hidden` is indistinguishable from "still fetching" once
+  // `loading` flips true again, which hides the skeleton on the next real
+  // request (first load, and after every period switch — the switch drops
+  // `ready`, and that run would otherwise overwrite the previous outcome).
+  const active = enabled && ready && Boolean(ledgerId) && input.months.length > 0
+
   const {
     data: explain,
     loading,
     reload,
-  } = useAsyncData<ExplainState>(async () => {
-    if (!enabled || !ready || !ledgerId || input.months.length === 0) return { kind: 'hidden' }
+    // The explicit return type breaks the inference cycle created by reading
+    // `explain` back inside its own loader.
+  } = useAsyncData<ExplainState>(async (): Promise<ExplainState> => {
+    // Carry the last outcome forward rather than clobbering it, so a sticky
+    // `flag_off` hide survives an inactive run instead of flashing a card.
+    if (!active) return explain ?? { kind: 'idle' }
     try {
       const hash = await dataVersionHash({ promptRev: PERIOD_EXPLAIN_PROMPT_REV, input })
       const res = await invokeAiFeature<PeriodExplainResult>({
@@ -68,10 +79,12 @@ export function AiPeriodExplainCard({
     }
   }, [ledgerId, enabled, ready, inputKey])
 
-  if (!enabled || !ready) return null
+  if (!active) return null
 
+  // `idle` now only means "not resolved yet", so it falls through to the
+  // skeleton below; `hidden` is the gateway kill switch alone.
   const state: ExplainState = explain ?? { kind: 'idle' }
-  if (state.kind === 'hidden' || state.kind === 'idle') return null
+  if (state.kind === 'hidden') return null
 
   return (
     <section className="rounded-surface bg-fill1 px-4 py-3.5">
