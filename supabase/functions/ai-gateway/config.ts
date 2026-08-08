@@ -9,6 +9,21 @@ export const OPENAI_BASE_URL = 'https://api.openai.com/v1'
 export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 export const CACHE_TRIM_KEEP = 20
 
+/**
+ * Disclosure/provider revision required for effective in-app AI opt-in.
+ * Keep in sync with `AI_DISCLOSURE_VERSION` in `src/ai/types.ts`.
+ * Bump when the named foreign processor or disclosure material changes.
+ */
+export const AI_DISCLOSURE_VERSION = 'openai-1'
+
+/** True only when the stored flag is on and disclosure matches the current revision. */
+export function isEffectiveInAppAiOptIn(
+  enabled: boolean | null | undefined,
+  disclosureVersion: string | null | undefined,
+): boolean {
+  return enabled === true && disclosureVersion === AI_DISCLOSURE_VERSION
+}
+
 export const OPENAI_MODELS = ['gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'] as const
 export type OpenAIModel = (typeof OPENAI_MODELS)[number]
 

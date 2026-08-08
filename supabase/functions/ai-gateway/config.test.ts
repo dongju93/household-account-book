@@ -1,14 +1,26 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  AI_DISCLOSURE_VERSION,
   OPENAI_REASONING_EFFORTS,
   REASONING_HEADROOM_TOKENS,
   VISIBLE_OUTPUT_TOKENS,
+  isEffectiveInAppAiOptIn,
   maxOutputTokensFor,
   parseOpenAIModel,
   parseOpenAIReasoningEffort,
   tokenEstimateFor,
 } from './config.ts'
+
+describe('AI disclosure consent', () => {
+  it('requires both the opt-in flag and the current disclosure version', () => {
+    expect(isEffectiveInAppAiOptIn(true, AI_DISCLOSURE_VERSION)).toBe(true)
+    expect(isEffectiveInAppAiOptIn(true, null)).toBe(false)
+    expect(isEffectiveInAppAiOptIn(true, 'xai-legacy')).toBe(false)
+    expect(isEffectiveInAppAiOptIn(false, AI_DISCLOSURE_VERSION)).toBe(false)
+    expect(isEffectiveInAppAiOptIn(undefined, undefined)).toBe(false)
+  })
+})
 
 describe('OpenAI deployment config', () => {
   it.each(['gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'] as const)(

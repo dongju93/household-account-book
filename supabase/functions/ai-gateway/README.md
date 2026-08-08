@@ -5,7 +5,8 @@ Provider-paid in-app AI entrypoint. Spec: `docs/4` §4.6.1 / §7.1, tracker S02.
 ## Control flow
 
 ```text
-parse body (≤32 KiB) → getUser → AI_FEATURES_ENABLED → in_app_ai_enabled
+parse body (≤32 KiB) → getUser → AI_FEATURES_ENABLED
+  → in_app_ai_enabled + disclosure_version == AI_DISCLOSURE_VERSION
   → is_ledger_member(minRole) → feature input limits
   → cache hit? (same model + reasoning effort + schema-valid; no quota) → claim_ai_quota
   → OpenAI Responses API (20s, strict JSON Schema + domain validate)
@@ -13,6 +14,11 @@ parse body (≤32 KiB) → getUser → AI_FEATURES_ENABLED → in_app_ai_enabled
   (settle/refund use claim's KST `day` so midnight-crossing calls release the same reservation)
   → optional cache upsert → audit log
 ```
+
+Effective opt-in requires both the boolean and `disclosure_version` matching
+`AI_DISCLOSURE_VERSION` in `config.ts` (mirrored in `src/ai/types.ts`). Bump the
+constant when the named foreign processor or disclosure changes; users must
+re-enable under the new copy before data is sent.
 
 ## Secrets
 

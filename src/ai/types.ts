@@ -39,6 +39,19 @@ export function isAiFeature(value: unknown): value is AiFeature {
   return typeof value === 'string' && (AI_FEATURES as readonly string[]).includes(value)
 }
 
+// ── Privacy / provider consent ───────────────────────────────────────────────
+
+/**
+ * Disclosure/provider revision the user must have accepted for in-app AI to be
+ * treated as enabled. Mirror `AI_DISCLOSURE_VERSION` in
+ * `supabase/functions/ai-gateway/config.ts`.
+ *
+ * Bump when the named foreign processor or disclosure material changes (e.g.
+ * xAI → OpenAI). Existing `in_app_ai_enabled = true` rows with a different
+ * version are treated as opted out until the user re-enables under the new copy.
+ */
+export const AI_DISCLOSURE_VERSION = 'openai-1' as const
+
 // ── Error codes (Edge contract) ──────────────────────────────────────────────
 
 export type AiErrorCode =

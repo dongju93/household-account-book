@@ -10,6 +10,7 @@ import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import {
   CACHE_TTL_MS,
   CACHE_TRIM_KEEP,
+  isEffectiveInAppAiOptIn,
   parseOpenAIModel,
   parseOpenAIReasoningEffort,
   type AiFeature,
@@ -89,16 +90,18 @@ function buildDeps(req: Request): GatewayDeps {
 
     async isInAppAiEnabled(userId) {
       // Dark launch: missing row → disabled (default false).
+      // Effective opt-in also requires disclosure_version == current so consent
+      // for a prior foreign processor (e.g. xAI) cannot authorize OpenAI.
       const { data, error } = await admin
         .from('ai_user_settings')
-        .select('in_app_ai_enabled')
+        .select('in_app_ai_enabled, disclosure_version')
         .eq('user_id', userId)
         .maybeSingle()
       if (error) {
         console.error(JSON.stringify({ audit: 'settings_error', error: error.message }))
         return false
       }
-      return data?.in_app_ai_enabled === true
+      return isEffectiveInAppAiOptIn(data?.in_app_ai_enabled, data?.disclosure_version)
     },
 
     async isLedgerMember(_userId, ledgerId, minRole) {
