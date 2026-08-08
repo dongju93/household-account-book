@@ -3,7 +3,7 @@
  *
  * Order (quota claim only after gates pass):
  *   getUser → flag → opt-out → membership(minRole) → validate →
- *   cache? → claim → xAI → settle/refund → audit
+ *   cache? → claim → OpenAI → settle/refund → audit
  *
  * Injectable deps enable pure acceptance tests without Deno/Docker.
  */
@@ -11,24 +11,25 @@
 import {
   CACHEABLE_FEATURES,
   FEATURE_MIN_ROLE,
-  MAX_COMPLETION_TOKENS,
   RAW_BODY_MAX_BYTES,
-  TOKEN_ESTIMATE,
   isAiFeaturesEnabled,
-  modelForFeature,
+  maxOutputTokensFor,
+  tokenEstimateFor,
   type AiFeature,
   type MinRole,
+  type OpenAIModel,
+  type OpenAIReasoningEffort,
 } from './config.ts'
 import { MESSAGES, errorBody, httpStatusFor, quotaExceededMessage } from './errors.ts'
+import { OpenAIError } from './openai.ts'
 import type {
   AiGatewayOkResponse,
   AiGatewayResponse,
   AuditEntry,
   ClaimQuotaResult,
-  XaiChatResult,
+  OpenAIResult,
 } from './types.ts'
 import { parseGatewayBody, periodKeyFor, validateFeatureResult } from './validate.ts'
-import { XaiError } from './xai.ts'
 
 export interface CachedInsight {
   result: unknown
@@ -77,21 +78,40 @@ export interface GatewayDeps {
     result: unknown
     model: string
   }) => Promise<void>
-  callXai: (args: {
+  callOpenAI: (args: {
     feature: AiFeature
     input: unknown
-    model: string
-    maxTokens: number
-  }) => Promise<XaiChatResult>
+    model: OpenAIModel
+    /** Wire `max_output_tokens`: reasoning + visible output, never visible-only. */
+    maxOutputTokens: number
+    reasoningEffort: OpenAIReasoningEffort
+    /** Hashed user id — the raw UUID must not leave this service. */
+    safetyIdentifier: string
+  }) => Promise<OpenAIResult>
   logAudit: (entry: AuditEntry) => void
   nowMs: () => number
   /** Override body size limit (tests). */
   maxBodyBytes?: number
-  /**
-   * Optional model id override (production: `XAI_DEFAULT_MODEL` secret).
-   * Empty/undefined → `DEFAULT_MODEL` in config.
-   */
-  defaultModel?: string | null
+  /** Required deployment model, parsed from `OPENAI_MODEL`. */
+  model: OpenAIModel
+  /** Required reasoning effort, parsed from `OPENAI_REASONING_EFFORT`. */
+  reasoningEffort: OpenAIReasoningEffort
+}
+
+/**
+ * Domain separation for the provider-facing user hash. Not a secret — the point
+ * is that OpenAI never receives `auth.users.id`, which also keys our audit log
+ * and every RLS policy. Changing this string re-anonymizes every user.
+ */
+const SAFETY_IDENTIFIER_NAMESPACE = 'household-account-book:ai-gateway:v1:'
+
+/** Stable opaque per-user id for OpenAI abuse tracking — never the raw UUID. */
+export async function safetyIdentifierFor(userId: string): Promise<string> {
+  const bytes = new TextEncoder().encode(`${SAFETY_IDENTIFIER_NAMESPACE}${userId}`)
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
 }
 
 const CORS_HEADERS: Record<string, string> = {
@@ -171,6 +191,12 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
     return jsonResponse(errorBody('forbidden', MESSAGES.forbidden), 403)
   }
 
+  const model = deps.model
+  const effort = deps.reasoningEffort
+  // Hashed before any quota is claimed: a failure here must not strand a
+  // reservation, and the raw user id must never reach the provider.
+  const safetyIdentifier = await safetyIdentifierFor(userId)
+
   // ── cache hit (no quota) ─────────────────────────────────────────────────
   const cacheable = CACHEABLE_FEATURES.has(feature)
   if (cacheable) {
@@ -189,7 +215,7 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
     })
     // Skip malformed cache rows (legacy poison or schema drift) and regenerate
     // instead of returning a shape that crashes the card until TTL expiry.
-    if (hit && validateFeatureResult(feature, hit.result).ok) {
+    if (hit && hit.model === model && validateFeatureResult(feature, hit.result).ok) {
       const body: AiGatewayOkResponse = {
         ok: true,
         feature,
@@ -214,36 +240,49 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
   }
 
   // ── claim ────────────────────────────────────────────────────────────────
-  const tokenEstimate = TOKEN_ESTIMATE[feature]
+  // Reserve prompt + visible output + typical reasoning spend: reasoning tokens
+  // are billed as output, so an effort-blind estimate under-claims and lets a
+  // user run past the monthly cap mid-request.
+  const tokenEstimate = tokenEstimateFor(feature, effort)
   const claim = await deps.claimQuota(userId, feature, tokenEstimate)
   if (!claim.ok) {
     const msg = quotaExceededMessage(claim.reason)
     return jsonResponse(errorBody('quota_exceeded', msg), 429)
   }
   // Pin settle/refund to this KST day. claim_ai_quota reserves on kst_today at
-  // claim time; settle/refund must not recompute "today" after xAI returns or a
+  // claim time; settle/refund must not recompute "today" after OpenAI returns or a
   // midnight-crossing call leaves tokens_reserved on the claim day forever.
   const claimDay = claim.day
 
-  // ── xAI ──────────────────────────────────────────────────────────────────
-  const model = modelForFeature(feature, deps.defaultModel)
-  const maxTokens = MAX_COMPLETION_TOKENS[feature]
-  let xai: XaiChatResult
+  // ── OpenAI ───────────────────────────────────────────────────────────────
+  // `max_output_tokens` covers reasoning + visible output, so the budget must be
+  // derived from the effort — a visible-only budget truncates mid-reasoning and
+  // returns `incomplete` with nothing usable, already billed.
+  const maxOutputTokens = maxOutputTokensFor(feature, effort)
+  let openai: OpenAIResult
   try {
-    xai = await deps.callXai({ feature, input, model, maxTokens })
+    openai = await deps.callOpenAI({
+      feature,
+      input,
+      model,
+      maxOutputTokens,
+      reasoningEffort: effort,
+      safetyIdentifier,
+    })
   } catch (e) {
     await safeRefund(deps, userId, feature, tokenEstimate, claimDay)
-    const code = e instanceof XaiError && e.kind === 'parse' ? 'parse' : 'upstream'
+    const code = e instanceof OpenAIError && e.kind === 'parse' ? 'parse' : 'upstream'
     // Client always gets the generic Korean copy; ops get the real cause.
     const message = code === 'parse' ? MESSAGES.parse : MESSAGES.upstream
     const errorDetail =
-      e instanceof XaiError
+      e instanceof OpenAIError
         ? e.message.slice(0, 400)
         : e instanceof Error
           ? e.message.slice(0, 400)
           : String(e).slice(0, 400)
-    const upstreamStatus = e instanceof XaiError ? e.status : undefined
-    const upstreamReason = e instanceof XaiError ? e.reason : code === 'parse' ? 'parse' : 'network'
+    const upstreamStatus = e instanceof OpenAIError ? e.status : undefined
+    const upstreamReason =
+      e instanceof OpenAIError ? e.reason : code === 'parse' ? 'parse' : 'network'
     deps.logAudit({
       user_id: userId,
       feature,
@@ -266,13 +305,13 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
     await deps.settleQuota(
       userId,
       feature,
-      xai.promptTokens,
-      xai.completionTokens,
+      openai.promptTokens,
+      openai.completionTokens,
       tokenEstimate,
       claimDay,
     )
   } catch {
-    // Rare: xAI already billed; leave claim reserved rather than silent double-refund.
+    // Rare: OpenAI already billed; leave claim reserved rather than silent double-refund.
     // Still return result so UX is not blocked.
   }
 
@@ -286,8 +325,8 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
           feature,
           periodKey,
           dataVersionHash,
-          result: xai.content,
-          model: xai.model,
+          result: openai.content,
+          model: openai.model,
         })
       } catch {
         // non-fatal
@@ -298,11 +337,11 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
   const okBody: AiGatewayOkResponse = {
     ok: true,
     feature,
-    result: xai.content,
-    model: xai.model,
+    result: openai.content,
+    model: openai.model,
     usage: {
-      promptTokens: xai.promptTokens,
-      completionTokens: xai.completionTokens,
+      promptTokens: openai.promptTokens,
+      completionTokens: openai.completionTokens,
     },
     quota: {
       remainingDaily: claim.remaining_daily ?? 0,
@@ -314,8 +353,8 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
   deps.logAudit({
     user_id: userId,
     feature,
-    model: xai.model,
-    tokens: xai.promptTokens + xai.completionTokens,
+    model: openai.model,
+    tokens: openai.promptTokens + openai.completionTokens,
     latency_ms: deps.nowMs() - started,
     cached: false,
     ledger_id: ledgerId,

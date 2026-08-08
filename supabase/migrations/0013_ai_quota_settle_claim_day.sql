@@ -3,7 +3,7 @@
 --
 -- claim_ai_quota already pins usage to ai_quota_kst_today() at claim time and
 -- returns that day. settle_ai_quota / refund_ai_quota_request used to recompute
--- kst_today() at completion. An xAI call that crosses KST midnight then:
+-- kst_today() at completion. A provider call that crosses KST midnight then:
 --   - never released tokens_reserved on the claim day (stale reserve → monthly cap)
 --   - recorded actual tokens on the next day (wrong day; cross-month misattributes)
 --

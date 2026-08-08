@@ -4,20 +4,30 @@
  */
 
 export const RAW_BODY_MAX_BYTES = 32 * 1024
-export const XAI_TIMEOUT_MS = 20_000
-export const XAI_BASE_URL = 'https://api.x.ai/v1'
-/**
- * Default chat model for paid gateway features.
- * Prefer a model every billed team can use; ops can override per deploy via
- * secret `XAI_DEFAULT_MODEL` without a code change (team model access varies).
- * Note: `grok-4.3` is documented publicly but is not enabled for all teams —
- * a 404 "model does not exist or your team … does not have access" maps to
- * HTTP 502 `code: "upstream"` from this gateway.
- */
-export const DEFAULT_MODEL = 'grok-4.5'
-export const FLAGSHIP_MODEL = 'grok-4.5'
+export const OPENAI_TIMEOUT_MS = 20_000
+export const OPENAI_BASE_URL = 'https://api.openai.com/v1'
 export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 export const CACHE_TRIM_KEEP = 20
+
+export const OPENAI_MODELS = ['gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'] as const
+export type OpenAIModel = (typeof OPENAI_MODELS)[number]
+
+/**
+ * Reasoning effort accepted by `OPENAI_REASONING_EFFORT`.
+ * Mirrors the Responses API enum (`none` … `max`); the API notes not every
+ * reasoning model supports every value, so a rejected value surfaces as
+ * `upstream` HTTP 400 rather than being caught here.
+ */
+export const OPENAI_REASONING_EFFORTS = [
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const
+export type OpenAIReasoningEffort = (typeof OPENAI_REASONING_EFFORTS)[number]
 
 export type AiFeature =
   | 'nl_txn_parse'
@@ -58,7 +68,10 @@ export const CACHEABLE_FEATURES: ReadonlySet<AiFeature> = new Set([
   'month_close_narrative',
 ])
 
-/** Pre-claim token estimate (§4.8.1 est. tokens/req). */
+/**
+ * Pre-claim token estimate for the prompt + visible completion (§4.8.1).
+ * Not the reservation itself — reasoning spend is added by `tokenEstimateFor`.
+ */
 export const TOKEN_ESTIMATE: Record<AiFeature, number> = {
   nl_txn_parse: 500,
   category_suggest: 300,
@@ -69,8 +82,11 @@ export const TOKEN_ESTIMATE: Record<AiFeature, number> = {
   chat_turn: 2000,
 }
 
-/** max_tokens for xAI completion (output budget, not claim estimate). */
-export const MAX_COMPLETION_TOKENS: Record<AiFeature, number> = {
+/**
+ * Visible (non-reasoning) output each feature's JSON result needs.
+ * Never send this as `max_output_tokens` — use `maxOutputTokensFor`.
+ */
+export const VISIBLE_OUTPUT_TOKENS: Record<AiFeature, number> = {
   nl_txn_parse: 400,
   category_suggest: 300,
   month_insight: 500,
@@ -80,19 +96,78 @@ export const MAX_COMPLETION_TOKENS: Record<AiFeature, number> = {
   chat_turn: 800,
 }
 
+/**
+ * Reasoning headroom added on top of the visible budget, per effort.
+ *
+ * The Responses API counts reasoning tokens against `max_output_tokens`, so a
+ * budget sized for the visible JSON alone gets consumed during reasoning and
+ * returns `status:"incomplete"` (`reason:"max_output_tokens"`) with **no**
+ * output — after the provider already billed input + reasoning tokens. OpenAI
+ * advises reserving ≥25k tokens for reasoning + output.
+ *
+ * This is a ceiling, not an allocation: unused headroom is never generated and
+ * never billed. Cost is bounded by the quota system, not by this number.
+ */
+export const REASONING_HEADROOM_TOKENS: Record<OpenAIReasoningEffort, number> = {
+  none: 0,
+  minimal: 1_000,
+  low: 4_000,
+  medium: 8_000,
+  high: 16_000,
+  xhigh: 25_000,
+  max: 32_000,
+}
+
+/**
+ * Typical reasoning spend reserved at claim time, per effort.
+ * Lower than the headroom ceiling on purpose: this is the expected case, and
+ * `settle_ai_quota` replaces it with actuals once the response lands.
+ */
+export const REASONING_ESTIMATE_TOKENS: Record<OpenAIReasoningEffort, number> = {
+  none: 0,
+  minimal: 250,
+  low: 1_000,
+  medium: 2_000,
+  high: 4_000,
+  xhigh: 6_000,
+  max: 8_000,
+}
+
+/**
+ * The only supported way to compute `max_output_tokens` for a request.
+ * Takes the effort because the wire budget is meaningless without it.
+ */
+export function maxOutputTokensFor(feature: AiFeature, effort: OpenAIReasoningEffort): number {
+  return VISIBLE_OUTPUT_TOKENS[feature] + REASONING_HEADROOM_TOKENS[effort]
+}
+
+/** The only supported way to compute the pre-call quota reservation. */
+export function tokenEstimateFor(feature: AiFeature, effort: OpenAIReasoningEffort): number {
+  return TOKEN_ESTIMATE[feature] + REASONING_ESTIMATE_TOKENS[effort]
+}
+
 export function isAiFeature(value: unknown): value is AiFeature {
   return typeof value === 'string' && (AI_FEATURES as readonly string[]).includes(value)
 }
 
-/**
- * Resolve the model id for a feature.
- * @param envDefault - optional `XAI_DEFAULT_MODEL` (trimmed); empty → code default
- */
-export function modelForFeature(feature: AiFeature, envDefault?: string | null): string {
-  // Per-feature flagship routing reserved for P1 chat; all features share one default today.
-  void feature
-  const fromEnv = (envDefault ?? '').trim()
-  return fromEnv || DEFAULT_MODEL
+/** Parse the required deployment model once at the environment boundary. */
+export function parseOpenAIModel(value: string): OpenAIModel {
+  const model = value.trim()
+  if (!(OPENAI_MODELS as readonly string[]).includes(model)) {
+    throw new Error(`OPENAI_MODEL must be one of: ${OPENAI_MODELS.join(', ')}`)
+  }
+  return model as OpenAIModel
+}
+
+/** Parse the required reasoning effort at the environment boundary. */
+export function parseOpenAIReasoningEffort(value: string): OpenAIReasoningEffort {
+  const effort = value.trim()
+  if (!(OPENAI_REASONING_EFFORTS as readonly string[]).includes(effort)) {
+    throw new Error(
+      `OPENAI_REASONING_EFFORT must be one of: ${OPENAI_REASONING_EFFORTS.join(', ')}`,
+    )
+  }
+  return effort as OpenAIReasoningEffort
 }
 
 /** Global kill switch: only explicit "true" enables paid calls (dark launch safe). */

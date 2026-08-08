@@ -91,4 +91,4 @@ export function InAppAiSettings() {
 
 /** Exposed for tests — must stay user-facing and present whenever the AI settings block is shown. */
 export const AI_DISCLOSURE =
-  '인앱 AI를 사용하면 거래 초안·월간 인사이트 등 요청에 필요한 입력·집계 정보가 제공자 LLM(xAI, 국외)으로 전송·처리될 수 있습니다. 원장 저장은 사용자가 확인한 뒤에만 이뤄지며, 인사이트 캐시는 최대 약 7일 보관될 수 있습니다. 원하지 않으면 아래에서 끌 수 있습니다.'
+  '인앱 AI를 사용하면 거래 초안·월간 인사이트 등 요청에 필요한 입력·집계 정보가 제공자 LLM(OpenAI, 국외)으로 전송·처리될 수 있습니다. 원장 저장은 사용자가 확인한 뒤에만 이뤄지며, 인사이트 캐시는 최대 약 7일 보관될 수 있습니다. 원하지 않으면 아래에서 끌 수 있습니다.'

@@ -79,7 +79,7 @@ function okResponse(
     ok: true,
     feature: 'period_explain',
     result,
-    model: 'grok-4.5',
+    model: 'gpt-5.6-luna',
     usage: { promptTokens: 200, completionTokens: 60 },
     quota: { remainingDaily: 9, remainingMonthly: 39 },
     cached,

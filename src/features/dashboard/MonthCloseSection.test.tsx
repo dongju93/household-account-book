@@ -72,7 +72,7 @@ function okResponse(
     ok: true,
     feature: 'month_close_narrative',
     result,
-    model: 'grok-4.5',
+    model: 'gpt-5.6-luna',
     usage: { promptTokens: 200, completionTokens: 60 },
     quota: { remainingDaily: 4, remainingMonthly: 19 },
     cached,

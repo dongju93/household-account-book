@@ -59,7 +59,7 @@ export interface ClaimQuotaDenied {
 
 export type ClaimQuotaResult = ClaimQuotaOk | ClaimQuotaDenied
 
-export interface XaiChatResult {
+export interface OpenAIResult {
   content: unknown
   model: string
   promptTokens: number
@@ -81,9 +81,9 @@ export interface AuditEntry {
    * Present when ok=false for upstream/parse so Dashboard logs show more than code.
    */
   error_detail?: string
-  /** xAI HTTP status when the failure was a non-2xx response. */
+  /** OpenAI HTTP status when the failure was a non-2xx response. */
   upstream_status?: number
-  /** Coarse failure class: timeout | http | missing_key | network | parse | empty */
+  /** Coarse provider failure class used by operations logs. */
   upstream_reason?: string
 }
 

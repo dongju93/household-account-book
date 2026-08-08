@@ -1,6 +1,6 @@
 /**
  * Acceptance tests for ai-gateway control flow (docs/4-1 S02).
- * Pure mock deps — no Docker / xAI / Deno required.
+ * Pure mock deps - no Docker / OpenAI / Deno required.
  *
  * Run: pnpm exec vp test run supabase/functions/ai-gateway/gateway.test.ts
  */
@@ -11,16 +11,20 @@ import {
   CACHEABLE_FEATURES,
   FEATURE_MIN_ROLE,
   RAW_BODY_MAX_BYTES,
+  OPENAI_REASONING_EFFORTS,
+  REASONING_ESTIMATE_TOKENS,
+  REASONING_HEADROOM_TOKENS,
   TOKEN_ESTIMATE,
+  VISIBLE_OUTPUT_TOKENS,
 } from './config.ts'
-import { handleAiGateway, type GatewayDeps } from './gateway.ts'
+import { handleAiGateway, safetyIdentifierFor, type GatewayDeps } from './gateway.ts'
+import { OpenAIError } from './openai.ts'
 import {
   parseGatewayBody,
   validateFeatureInput,
   validateFeatureResult,
   validateGatewayEnvelope,
 } from './validate.ts'
-import { XaiError } from './xai.ts'
 
 const LEDGER = '11111111-1111-4111-8111-111111111111'
 const USER = '22222222-2222-4222-8222-222222222222'
@@ -68,17 +72,19 @@ type TrackedDeps = GatewayDeps & {
   claims: number
   refunds: number
   settles: number
-  xaiCalls: number
+  openAiCalls: number
 }
 
 function makeDeps(partial: Partial<GatewayDeps> = {}): TrackedDeps {
-  const counters = { claims: 0, refunds: 0, settles: 0, xaiCalls: 0 }
+  const counters = { claims: 0, refunds: 0, settles: 0, openAiCalls: 0 }
 
   const deps: TrackedDeps = {
     claims: 0,
     refunds: 0,
     settles: 0,
-    xaiCalls: 0,
+    openAiCalls: 0,
+    model: 'gpt-5.6-luna',
+    reasoningEffort: 'low',
     aiFeaturesEnabledEnv: 'true',
     getUserId: async (h) => (h?.toLowerCase().startsWith('bearer ') ? USER : null),
     isInAppAiEnabled: async () => true,
@@ -95,9 +101,9 @@ function makeDeps(partial: Partial<GatewayDeps> = {}): TrackedDeps {
     settleQuota: async () => {},
     refundQuota: async () => {},
     upsertCache: async () => {},
-    callXai: async () => ({
+    callOpenAI: async () => ({
       content: { ok: true },
-      model: 'grok-4.5',
+      model: 'gpt-5.6-luna',
       promptTokens: 10,
       completionTokens: 5,
     }),
@@ -124,11 +130,11 @@ function makeDeps(partial: Partial<GatewayDeps> = {}): TrackedDeps {
     deps.settles = counters.settles
     return settleInner(...args)
   }
-  const xaiInner = deps.callXai
-  deps.callXai = async (...args) => {
-    counters.xaiCalls++
-    deps.xaiCalls = counters.xaiCalls
-    return xaiInner(...args)
+  const openAiInner = deps.callOpenAI
+  deps.callOpenAI = async (...args) => {
+    counters.openAiCalls++
+    deps.openAiCalls = counters.openAiCalls
+    return openAiInner(...args)
   }
 
   return deps
@@ -158,7 +164,7 @@ describe('S02 ai-gateway acceptance', () => {
     expect(json.ok).toBe(false)
     expect(json.code).toBe('unauthorized')
     expect(deps.claims).toBe(0)
-    expect(deps.xaiCalls).toBe(0)
+    expect(deps.openAiCalls).toBe(0)
   })
 
   it('옵트아웃 → forbidden (claim 전)', async () => {
@@ -167,7 +173,7 @@ describe('S02 ai-gateway acceptance', () => {
     expect(res.status).toBe(403)
     expect((await res.json()).code).toBe('forbidden')
     expect(deps.claims).toBe(0)
-    expect(deps.xaiCalls).toBe(0)
+    expect(deps.openAiCalls).toBe(0)
   })
 
   it('역할 부족 / 타 ledger → forbidden (claim 전)', async () => {
@@ -176,10 +182,10 @@ describe('S02 ai-gateway acceptance', () => {
     expect(res.status).toBe(403)
     expect((await res.json()).code).toBe('forbidden')
     expect(deps.claims).toBe(0)
-    expect(deps.xaiCalls).toBe(0)
+    expect(deps.openAiCalls).toBe(0)
   })
 
-  it('payload 초과 → validation (xAI·claim 없음)', async () => {
+  it('payload 초과 -> validation (OpenAI/claim 없음)', async () => {
     const deps = makeDeps()
     const huge = 'x'.repeat(RAW_BODY_MAX_BYTES + 1)
     const req = new Request('http://localhost/functions/v1/ai-gateway', {
@@ -194,7 +200,7 @@ describe('S02 ai-gateway acceptance', () => {
     expect(res.status).toBe(400)
     expect((await res.json()).code).toBe('validation')
     expect(deps.claims).toBe(0)
-    expect(deps.xaiCalls).toBe(0)
+    expect(deps.openAiCalls).toBe(0)
   })
 
   it('feature field limit (text>200) → validation, no claim', async () => {
@@ -224,7 +230,7 @@ describe('S02 ai-gateway acceptance', () => {
     expect(json.code).toBe('quota_exceeded')
     expect(json.message).toContain('오늘')
     expect(json.message).toContain('한도')
-    expect(deps.xaiCalls).toBe(0)
+    expect(deps.openAiCalls).toBe(0)
   })
 
   it('월 쿼터 초과 메시지는 이번 달 문구', async () => {
@@ -243,7 +249,7 @@ describe('S02 ai-gateway acceptance', () => {
           bullets: VALID_INSIGHT_BULLETS,
           groundedMonth: '2026-07',
         },
-        model: 'grok-4.5',
+        model: 'gpt-5.6-luna',
       }),
     })
     const res = await postJson(insightBody(), deps)
@@ -252,7 +258,34 @@ describe('S02 ai-gateway acceptance', () => {
     expect(json.ok).toBe(true)
     expect(json.cached).toBe(true)
     expect(deps.claims).toBe(0)
-    expect(deps.xaiCalls).toBe(0)
+    expect(deps.openAiCalls).toBe(0)
+  })
+
+  it('현재 모델과 다른 캐시 행은 miss로 처리한다', async () => {
+    const deps = makeDeps({
+      lookupCache: async () => ({
+        result: {
+          bullets: VALID_INSIGHT_BULLETS,
+          groundedMonth: '2026-07',
+        },
+        model: 'legacy-provider-model',
+      }),
+      callOpenAI: async () => ({
+        content: {
+          bullets: VALID_INSIGHT_BULLETS,
+          groundedMonth: '2026-07',
+        },
+        model: 'gpt-5.6-luna',
+        promptTokens: 10,
+        completionTokens: 5,
+      }),
+    })
+
+    const res = await postJson(insightBody(), deps)
+    expect(res.status).toBe(200)
+    expect((await res.json()).cached).toBe(false)
+    expect(deps.claims).toBe(1)
+    expect(deps.openAiCalls).toBe(1)
   })
 
   it('malformed cache row is treated as miss (regenerate, not serve poison)', async () => {
@@ -260,14 +293,14 @@ describe('S02 ai-gateway acceptance', () => {
       lookupCache: async () => ({
         // Valid JSON historically cached, but bullets is not a string[].
         result: { bullets: 'not-an-array', groundedMonth: '2026-07' },
-        model: 'grok-4.5',
+        model: 'gpt-5.6-luna',
       }),
-      callXai: async () => ({
+      callOpenAI: async () => ({
         content: {
           bullets: VALID_INSIGHT_BULLETS,
           groundedMonth: '2026-07',
         },
-        model: 'grok-4.5',
+        model: 'gpt-5.6-luna',
         promptTokens: 10,
         completionTokens: 5,
       }),
@@ -279,7 +312,7 @@ describe('S02 ai-gateway acceptance', () => {
     expect(json.cached).toBe(false)
     expect(json.result.bullets).toEqual(VALID_INSIGHT_BULLETS)
     expect(deps.claims).toBe(1)
-    expect(deps.xaiCalls).toBe(1)
+    expect(deps.openAiCalls).toBe(1)
     expect(deps.settles).toBe(1)
   })
 
@@ -289,8 +322,8 @@ describe('S02 ai-gateway acceptance', () => {
       | { code?: string; error_detail?: string; upstream_status?: number; upstream_reason?: string }
       | undefined
     const deps = makeDeps({
-      callXai: async () => {
-        throw new XaiError('upstream', 'xAI HTTP 401: Incorrect API key', {
+      callOpenAI: async () => {
+        throw new OpenAIError('upstream', 'OpenAI HTTP 401: Incorrect API key', {
           status: 401,
           reason: 'http',
         })
@@ -321,7 +354,7 @@ describe('S02 ai-gateway acceptance', () => {
     expect(audit?.error_detail).toContain('401')
   })
 
-  it('성공 경로: claim → xAI → settle', async () => {
+  it('성공 경로: claim -> OpenAI -> settle', async () => {
     let settleDay: string | undefined
     const deps = makeDeps({
       settleQuota: async (_u, _f, _p, _c, _e, claimDay) => {
@@ -334,12 +367,101 @@ describe('S02 ai-gateway acceptance', () => {
     expect(json.ok).toBe(true)
     expect(json.feature).toBe('nl_txn_parse')
     expect(deps.claims).toBe(1)
-    expect(deps.xaiCalls).toBe(1)
+    expect(deps.openAiCalls).toBe(1)
     expect(deps.settles).toBe(1)
     expect(deps.refunds).toBe(0)
-    // Settle must use claim day so a midnight-crossing xAI call releases the
+    // Settle must use claim day so a midnight-crossing OpenAI call releases the
     // same day's tokens_reserved (P2 claim-day settlement).
     expect(settleDay).toBe('2026-07-11')
+  })
+
+  it('파싱된 모델·reasoning을 OpenAI 경계에 전달한다', async () => {
+    let providerArgs: Parameters<GatewayDeps['callOpenAI']>[0] | undefined
+    const deps = makeDeps({
+      model: 'gpt-5.6-terra',
+      reasoningEffort: 'xhigh',
+      callOpenAI: async (args) => {
+        providerArgs = args
+        return {
+          content: { ok: true },
+          model: args.model,
+          promptTokens: 10,
+          completionTokens: 5,
+        }
+      },
+    })
+
+    const res = await postJson(baseNlBody(), deps)
+    expect(res.status).toBe(200)
+    expect(providerArgs).toMatchObject({
+      model: 'gpt-5.6-terra',
+      reasoningEffort: 'xhigh',
+    })
+  })
+
+  it('원시 user id 대신 해시된 safety identifier를 보낸다', async () => {
+    let providerArgs: Parameters<GatewayDeps['callOpenAI']>[0] | undefined
+    const deps = makeDeps({
+      callOpenAI: async (args) => {
+        providerArgs = args
+        return { content: { ok: true }, model: args.model, promptTokens: 10, completionTokens: 5 }
+      },
+    })
+
+    await postJson(baseNlBody(), deps)
+    // The provider must never receive auth.users.id: it keys our audit log and
+    // every RLS policy, so leaking it exports an internal join key.
+    expect(providerArgs?.safetyIdentifier).not.toBe(USER)
+    expect(providerArgs?.safetyIdentifier).toMatch(/^[0-9a-f]{64}$/)
+    // Stable per user, or OpenAI-side abuse tracking is worthless.
+    expect(providerArgs?.safetyIdentifier).toBe(await safetyIdentifierFor(USER))
+    expect(await safetyIdentifierFor(USER)).not.toBe(await safetyIdentifierFor(LEDGER))
+  })
+
+  it('max_output_tokens는 reasoning 헤드룸을 포함한다', async () => {
+    // The whole point of the migration fix: a visible-only budget gets consumed
+    // during reasoning and returns `incomplete` with nothing usable, already billed.
+    let providerArgs: Parameters<GatewayDeps['callOpenAI']>[0] | undefined
+    let claimedEstimate = -1
+    const deps = makeDeps({
+      reasoningEffort: 'high',
+      claimQuota: async (_u, _f, tokenEstimate) => {
+        claimedEstimate = tokenEstimate
+        return {
+          ok: true,
+          remaining_daily: 9,
+          remaining_monthly: 99,
+          remaining_tokens_month: 1000,
+          day: '2026-07-11',
+        }
+      },
+      callOpenAI: async (args) => {
+        providerArgs = args
+        return { content: { ok: true }, model: args.model, promptTokens: 10, completionTokens: 5 }
+      },
+    })
+
+    await postJson(baseNlBody(), deps)
+    expect(providerArgs?.maxOutputTokens).toBe(
+      VISIBLE_OUTPUT_TOKENS.nl_txn_parse + REASONING_HEADROOM_TOKENS.high,
+    )
+    expect(providerArgs?.maxOutputTokens).toBeGreaterThan(VISIBLE_OUTPUT_TOKENS.nl_txn_parse)
+    // Reasoning tokens are billed as output, so the reservation must cover them too.
+    expect(claimedEstimate).toBe(TOKEN_ESTIMATE.nl_txn_parse + REASONING_ESTIMATE_TOKENS.high)
+  })
+
+  it("effort 'none'이면 헤드룸 없이 가시 출력 예산만 쓴다", async () => {
+    let providerArgs: Parameters<GatewayDeps['callOpenAI']>[0] | undefined
+    const deps = makeDeps({
+      reasoningEffort: 'none',
+      callOpenAI: async (args) => {
+        providerArgs = args
+        return { content: { ok: true }, model: args.model, promptTokens: 10, completionTokens: 5 }
+      },
+    })
+
+    await postJson(baseNlBody(), deps)
+    expect(providerArgs?.maxOutputTokens).toBe(VISIBLE_OUTPUT_TOKENS.nl_txn_parse)
   })
 
   it('settle/refund use claim day even when claim day ≠ wall-clock today', async () => {
@@ -373,8 +495,8 @@ describe('S02 ai-gateway acceptance', () => {
         remaining_tokens_month: 1000,
         day: claimDay,
       }),
-      callXai: async () => {
-        throw new XaiError('upstream', 'timeout')
+      callOpenAI: async () => {
+        throw new OpenAIError('upstream', 'timeout')
       },
       refundQuota: async (_u, _f, _e, day) => {
         refundDay = day
@@ -600,6 +722,21 @@ describe('feature matrix sanity', () => {
   it('token estimates align with §4.8.1', () => {
     expect(TOKEN_ESTIMATE.nl_txn_parse).toBe(500)
     expect(TOKEN_ESTIMATE.month_insight).toBe(750)
+  })
+
+  it('every reasoning effort has a headroom and an estimate', () => {
+    // A missing entry would silently make max_output_tokens NaN and send an
+    // invalid request, so the records must stay total over the effort union.
+    for (const effort of OPENAI_REASONING_EFFORTS) {
+      expect(Number.isInteger(REASONING_HEADROOM_TOKENS[effort])).toBe(true)
+      expect(Number.isInteger(REASONING_ESTIMATE_TOKENS[effort])).toBe(true)
+      // Headroom is a ceiling, the estimate is the expected case: never inverted.
+      expect(REASONING_HEADROOM_TOKENS[effort]).toBeGreaterThanOrEqual(
+        REASONING_ESTIMATE_TOKENS[effort],
+      )
+    }
+    expect(REASONING_HEADROOM_TOKENS.none).toBe(0)
+    expect(REASONING_ESTIMATE_TOKENS.none).toBe(0)
   })
 })
 

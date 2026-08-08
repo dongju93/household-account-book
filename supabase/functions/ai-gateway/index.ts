@@ -7,13 +7,46 @@
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 
-import { CACHE_TTL_MS, CACHE_TRIM_KEEP, type AiFeature, type MinRole } from './config.ts'
-import { handleAiGateway, type GatewayDeps } from './gateway.ts'
+import {
+  CACHE_TTL_MS,
+  CACHE_TRIM_KEEP,
+  parseOpenAIModel,
+  parseOpenAIReasoningEffort,
+  type AiFeature,
+  type MinRole,
+} from './config.ts'
+import { MESSAGES, errorBody, httpStatusFor } from './errors.ts'
+import {
+  corsPreflightResponse,
+  handleAiGateway,
+  jsonResponse,
+  type GatewayDeps,
+} from './gateway.ts'
+import { OpenAIError, callOpenAIStructured } from './openai.ts'
 import type { ClaimQuotaResult } from './types.ts'
-import { XaiError, callXaiStructured } from './xai.ts'
 
 Deno.serve(async (req: Request) => {
-  const deps = buildDeps(req)
+  // Preflight must answer even when secrets are missing, or the browser reports
+  // an opaque CORS failure instead of the real error below.
+  if (req.method === 'OPTIONS') {
+    return corsPreflightResponse()
+  }
+
+  let deps: GatewayDeps
+  try {
+    deps = buildDeps(req)
+  } catch (e) {
+    // Misconfigured deployment (missing or invalid secret). Without this catch the
+    // throw escapes as a raw platform 500 with no CORS headers and no audit line —
+    // and it happens before AI_FEATURES_ENABLED, so the kill switch cannot mask it.
+    console.error(
+      JSON.stringify({
+        audit: 'ai_gateway_config_error',
+        error_detail: (e instanceof Error ? e.message : String(e)).slice(0, 400),
+      }),
+    )
+    return jsonResponse(errorBody('upstream', MESSAGES.upstream), httpStatusFor('upstream'))
+  }
   return handleAiGateway(req, deps)
 })
 
@@ -21,7 +54,9 @@ function buildDeps(req: Request): GatewayDeps {
   const supabaseUrl = requiredEnv('SUPABASE_URL')
   const anonKey = requiredEnv('SUPABASE_ANON_KEY')
   const serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY')
-  const xaiKey = Deno.env.get('XAI_API_KEY') ?? ''
+  const openaiKey = Deno.env.get('OPENAI_API_KEY') ?? ''
+  const model = parseOpenAIModel(requiredEnv('OPENAI_MODEL'))
+  const reasoningEffort = parseOpenAIReasoningEffort(requiredEnv('OPENAI_REASONING_EFFORT'))
 
   // User-scoped client: JWT from caller → getUser + is_ledger_member (auth.uid()).
   const userClient = createClient(supabaseUrl, anonKey, {
@@ -38,8 +73,8 @@ function buildDeps(req: Request): GatewayDeps {
 
   return {
     aiFeaturesEnabledEnv: Deno.env.get('AI_FEATURES_ENABLED'),
-    // Team model access varies; set without code change when 404 "model does not exist".
-    defaultModel: Deno.env.get('XAI_DEFAULT_MODEL'),
+    model,
+    reasoningEffort,
 
     async getUserId(authHeader) {
       if (!authHeader || !authHeader.toLowerCase().startsWith('bearer ')) {
@@ -153,19 +188,28 @@ function buildDeps(req: Request): GatewayDeps {
       await admin.from('ai_insight_cache').delete().lt('expires_at', new Date().toISOString())
     },
 
-    async callXai({ feature, input, model, maxTokens }) {
-      if (!xaiKey) {
+    async callOpenAI({
+      feature,
+      input,
+      model,
+      maxOutputTokens,
+      reasoningEffort,
+      safetyIdentifier,
+    }) {
+      if (!openaiKey) {
         // Common after deploy when secrets were not set/propagated.
-        throw new XaiError('upstream', 'XAI_API_KEY is not configured', {
+        throw new OpenAIError('upstream', 'OPENAI_API_KEY is not configured', {
           reason: 'missing_key',
         })
       }
-      return callXaiStructured({
-        apiKey: xaiKey,
+      return callOpenAIStructured({
+        apiKey: openaiKey,
         feature,
         input,
         model,
-        maxTokens,
+        maxOutputTokens,
+        reasoningEffort,
+        safetyIdentifier,
       })
     },
 

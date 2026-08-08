@@ -72,7 +72,7 @@ function okResponse(
     ok: true,
     feature: 'nl_txn_parse',
     result: { draft, confidence: 'high', warnings },
-    model: 'grok-4.5',
+    model: 'gpt-5.6-luna',
     usage: { promptTokens: 100, completionTokens: 40 },
     quota: { remainingDaily: 39, remainingMonthly: 399 },
   }

@@ -32,7 +32,7 @@ const okBody: AiGatewayOkResponse<NlTxnParseResult> = {
     confidence: 'high',
     warnings: [],
   },
-  model: 'grok-4.5',
+  model: 'gpt-5.6-luna',
   usage: { promptTokens: 100, completionTokens: 40 },
   quota: { remainingDaily: 39, remainingMonthly: 399 },
   cached: false,
