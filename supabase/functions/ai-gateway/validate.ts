@@ -1,5 +1,5 @@
 /**
- * Payload hard limits — enforced before claim / xAI (docs/4 §4.8.4).
+ * Payload hard limits - enforced before claim / OpenAI (docs/4 §4.8.4).
  * Pure functions; no I/O.
  */
 
@@ -363,7 +363,7 @@ export function periodKeyFor(feature: AiFeature, input: unknown): string | null 
 }
 
 // ── Structured-output result validation (mirrors schemas.ts) ─────────────────
-// xAI may return syntactically valid JSON that still violates the feature
+// A provider may return syntactically valid JSON that still violates the feature
 // schema. Reject before settle/cache so a bad shape is never served or stored.
 
 export type ResultValidationOk = { ok: true }

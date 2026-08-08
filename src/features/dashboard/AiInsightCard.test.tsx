@@ -3,7 +3,12 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 import { AiSettingsProvider } from '../../ai/AiSettingsProvider'
-import type { AiGatewayOkResponse, MonthInsightInput, MonthInsightResult } from '../../ai/types'
+import {
+  AI_DISCLOSURE_VERSION,
+  type AiGatewayOkResponse,
+  type MonthInsightInput,
+  type MonthInsightResult,
+} from '../../ai/types'
 import { AuthContext, type AuthValue } from '../../auth/authContext'
 import type { AiUserSettings } from '../../data/aiSettings'
 
@@ -41,7 +46,13 @@ const INPUT: MonthInsightInput = {
 }
 
 function aiSettings(enabled: boolean): AiUserSettings {
-  return { userId: USER_ID, inAppAiEnabled: enabled, shareMemoWithAi: true, updatedAt: null }
+  return {
+    userId: USER_ID,
+    inAppAiEnabled: enabled,
+    disclosureVersion: enabled ? AI_DISCLOSURE_VERSION : null,
+    shareMemoWithAi: true,
+    updatedAt: null,
+  }
 }
 
 function okResponse(
@@ -52,7 +63,7 @@ function okResponse(
     ok: true,
     feature: 'month_insight',
     result,
-    model: 'grok-4.5',
+    model: 'gpt-5.6-luna',
     usage: { promptTokens: 200, completionTokens: 60 },
     quota: { remainingDaily: 9, remainingMonthly: 39 },
     cached,

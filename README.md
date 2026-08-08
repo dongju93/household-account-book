@@ -11,7 +11,7 @@
 - **고정 항목** — 월급, 월세, 구독료처럼 매달 반복되는 항목을 등록해 두면 해당 월을 열 때 거래로 반영됩니다.
 - **엑셀보내기** — 거래 내역 화면에서 현재 필터(월·구분·카테고리·메모)에 맞는 내역을 `.xlsx` 파일로 받을 수 있습니다.
 - **통계 보기** — 최근 3·6·12개월 추이와 카테고리별 지출을 차트로 비교합니다.
-- **인앱 AI (옵트인)** — 설정에서 고지를 확인하고 켠 뒤에만 동작합니다. API 키는 브라우저에 두지 않고 Supabase Edge Function이 xAI를 호출합니다.
+- **인앱 AI (옵트인)** — 설정에서 고지를 확인하고 켠 뒤에만 동작합니다. API 키는 브라우저에 두지 않고 Supabase Edge Function이 OpenAI를 호출합니다.
   - **자연어 거래 초안** — 거래 추가 시트에 문장으로 입력하면 금액·구분·카테고리·메모를 폼에 채웁니다. **적용은 초안만**이며, 원장 저장은 사용자가 확인한 뒤 기존 저장 버튼으로만 이뤄집니다.
   - **월 인사이트·절약 팁** — 원시 거래가 아닌 월 합계·예산/목표 달성률·계획 대비 실제 지출 비중·상위 지출 같은 집계만 전송해 짧은 인사이트를 만듭니다. 절약 팁은 앱의 규칙 기반 계산으로 만들며, 진행 중인 달에는 남은 기간의 추가 지출을, 마감된 달에는 다음 달 예산 조정을 안내합니다.
   - **월 마감 점검 내러티브** — 과거 월 요약에서 빠진 고정 항목·중복 의심·메모 없는 큰 지출·예산 초과·목표 미달 등 점검을 펼쳐 볼 수 있고, 그 결과를 짧은 글로 요약합니다.
@@ -57,21 +57,21 @@
 
 - **Frontend**: React 19, TypeScript, Vite, React Router, Tailwind CSS, Recharts
 - **Backend/Data**: Supabase Auth, Postgres, Row Level Security, RPC
-- **인앱 AI**: Supabase Edge Function `ai-gateway` → xAI (키는 서버 시크릿만; 클라이언트 `VITE_*` 금지)
+- **인앱 AI**: Supabase Edge Function `ai-gateway` → OpenAI Responses API (키는 서버 시크릿만; 클라이언트 `VITE_*` 금지)
 - **브라우저 AI 연동**: WebMCP (`@mcp-b/global`, `@mcp-b/react-webmcp`) — 읽기 위주 도구를 브라우저 에이전트에 노출
 - **Tooling**: pnpm, Vite+ (Vitest, Oxlint, Oxfmt), Testing Library
 
 ## 코드 구조
 
-| 경로                    | 역할                                                                                  |
-| ----------------------- | ------------------------------------------------------------------------------------- |
-| `src/features/`         | 로그인·요약·내역·통계·설정 화면과 화면 단위 컴포넌트                                  |
-| `src/auth/`, `src/app/` | 인증·가계부 컨텍스트, 공통 레이아웃, 비동기 조회·새로고침·페이지네이션 훅             |
-| `src/data/`             | Supabase 조회·변경과 DB의 `snake_case` 행을 도메인 모델로 변환하는 계층               |
-| `src/domain/`           | 월 요약, 예산 페이스, 통계, 마감 점검, 입력 검증처럼 I/O 없는 순수 계산               |
-| `src/webmcp/`           | 화면 문맥에 맞춘 WebMCP 도구 등록과 구조화된 입출력                                   |
-| `supabase/migrations/`  | Postgres 스키마, RLS, 가입 초기화, 고정 항목 반영·동기화 RPC                          |
-| `supabase/functions/`   | 인증·옵트인·권한·쿼터·캐시·응답 검증을 거쳐 xAI를 호출하는 `ai-gateway` Edge Function |
+| 경로                    | 역할                                                                                     |
+| ----------------------- | ---------------------------------------------------------------------------------------- |
+| `src/features/`         | 로그인·요약·내역·통계·설정 화면과 화면 단위 컴포넌트                                     |
+| `src/auth/`, `src/app/` | 인증·가계부 컨텍스트, 공통 레이아웃, 비동기 조회·새로고침·페이지네이션 훅                |
+| `src/data/`             | Supabase 조회·변경과 DB의 `snake_case` 행을 도메인 모델로 변환하는 계층                  |
+| `src/domain/`           | 월 요약, 예산 페이스, 통계, 마감 점검, 입력 검증처럼 I/O 없는 순수 계산                  |
+| `src/webmcp/`           | 화면 문맥에 맞춘 WebMCP 도구 등록과 구조화된 입출력                                      |
+| `supabase/migrations/`  | Postgres 스키마, RLS, 가입 초기화, 고정 항목 반영·동기화 RPC                             |
+| `supabase/functions/`   | 인증·옵트인·권한·쿼터·캐시·응답 검증을 거쳐 OpenAI를 호출하는 `ai-gateway` Edge Function |
 
 Supabase 클라이언트는 `src/lib/supabase.ts`의 싱글턴만 사용합니다. 고정 항목은 월을 열 때 실제 거래로 멱등 반영되므로 요약·내역·통계·내보내기가 같은 거래 데이터를 읽습니다. 변경 후에는 공통 새로고침 버전을 올려 각 화면이 최신 데이터를 다시 조회합니다.
 
@@ -116,21 +116,25 @@ WebMCP Origin Trial 토큰은 `index.html`에 있으며 현재 배포 도메인�
 
 ## AI 게이트웨이 (Edge Function) 배포
 
-인앱 AI는 SPA가 아니라 **Supabase Edge Function `ai-gateway`** 가 xAI를 호출합니다.  
+인앱 AI는 SPA가 아니라 **Supabase Edge Function `ai-gateway`** 가 OpenAI Responses API를 호출합니다.
+
 API 키는 클라이언트/`VITE_*`에 넣지 않습니다. Amplify(`amplify.yml`)는 프론트 `dist/`만 빌드하므로, **함수 배포는 Amplify와 분리**합니다.
 
 ### 1. 시크릿 설정
 
 ```bash
-supabase secrets set XAI_API_KEY=xai-...
-# 선택: 계정에서 사용할 수 있는 모델로 기본값(grok-4.5) 재정의
-supabase secrets set XAI_DEFAULT_MODEL=<model-id>
+supabase secrets set OPENAI_API_KEY=...
+# 필수: 모델과 reasoning effort (기본값·폴백 없음)
+supabase secrets set OPENAI_MODEL=gpt-5.6-luna
+supabase secrets set OPENAI_REASONING_EFFORT=<none|minimal|low|medium|high|xhigh|max>
 # 글로벌 킬 스위치: dark launch 중에는 false, 실제 호출을 열 때만 true
 supabase secrets set AI_FEATURES_ENABLED=false
 # AI_QUOTA_TZ 기본은 Asia/Seoul — 쿼터 일/월 경계는 DB RPC가 KST 기준
 ```
 
 플랫폼이 주입하는 값(`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`)은 보통 별도 설정이 필요 없습니다. 로컬 서빙 시에는 `supabase start` 환경에 맞춰 자동 주입됩니다.
+
+`OPENAI_MODEL`·`OPENAI_REASONING_EFFORT`는 시작 시 파싱되며 폴백이 없습니다. 값이 잘못되면 킬 스위치보다 먼저 걸려 모든 요청이 502로 떨어지므로, **첫 배포 전에 반드시 설정**합니다. effort를 올리면 요청당 생성 가능한 토큰(추론 포함)과 쿼터 예약량이 함께 올라갑니다 — 근거와 조정 지점은 `supabase/functions/ai-gateway/README.md` 참고.
 
 ### 2. 함수 배포 / 롤백
 

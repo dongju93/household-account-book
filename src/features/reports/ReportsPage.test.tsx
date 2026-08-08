@@ -21,6 +21,7 @@ vi.mock('../../data/aiSettings', () => ({
   getAiUserSettings: vi.fn().mockResolvedValue({
     userId: 'user-1',
     inAppAiEnabled: false,
+    disclosureVersion: null,
     shareMemoWithAi: true,
     updatedAt: null,
   }),

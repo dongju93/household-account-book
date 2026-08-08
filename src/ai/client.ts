@@ -1,6 +1,6 @@
 /**
  * Browser client for Edge `ai-gateway` (docs/4 §7.1, PR-3).
- * Never holds XAI_API_KEY — only user JWT via the Supabase singleton.
+ * Never holds OPENAI_API_KEY - only user JWT via the Supabase singleton.
  */
 
 import { supabase } from '../lib/supabase'

@@ -24,6 +24,7 @@ function settings(partial: Partial<AiUserSettings> = {}): AiUserSettings {
   return {
     userId: USER_ID,
     inAppAiEnabled: false,
+    disclosureVersion: null,
     shareMemoWithAi: true,
     updatedAt: null,
     ...partial,

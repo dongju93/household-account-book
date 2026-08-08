@@ -7,13 +7,47 @@
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 
-import { CACHE_TTL_MS, CACHE_TRIM_KEEP, type AiFeature, type MinRole } from './config.ts'
-import { handleAiGateway, type GatewayDeps } from './gateway.ts'
+import {
+  CACHE_TTL_MS,
+  CACHE_TRIM_KEEP,
+  isEffectiveInAppAiOptIn,
+  parseOpenAIModel,
+  parseOpenAIReasoningEffort,
+  type AiFeature,
+  type MinRole,
+} from './config.ts'
+import { MESSAGES, errorBody, httpStatusFor } from './errors.ts'
+import {
+  corsPreflightResponse,
+  handleAiGateway,
+  jsonResponse,
+  type GatewayDeps,
+} from './gateway.ts'
+import { OpenAIError, callOpenAIStructured } from './openai.ts'
 import type { ClaimQuotaResult } from './types.ts'
-import { XaiError, callXaiStructured } from './xai.ts'
 
 Deno.serve(async (req: Request) => {
-  const deps = buildDeps(req)
+  // Preflight must answer even when secrets are missing, or the browser reports
+  // an opaque CORS failure instead of the real error below.
+  if (req.method === 'OPTIONS') {
+    return corsPreflightResponse()
+  }
+
+  let deps: GatewayDeps
+  try {
+    deps = buildDeps(req)
+  } catch (e) {
+    // Misconfigured deployment (missing or invalid secret). Without this catch the
+    // throw escapes as a raw platform 500 with no CORS headers and no audit line —
+    // and it happens before AI_FEATURES_ENABLED, so the kill switch cannot mask it.
+    console.error(
+      JSON.stringify({
+        audit: 'ai_gateway_config_error',
+        error_detail: (e instanceof Error ? e.message : String(e)).slice(0, 400),
+      }),
+    )
+    return jsonResponse(errorBody('upstream', MESSAGES.upstream), httpStatusFor('upstream'))
+  }
   return handleAiGateway(req, deps)
 })
 
@@ -21,7 +55,9 @@ function buildDeps(req: Request): GatewayDeps {
   const supabaseUrl = requiredEnv('SUPABASE_URL')
   const anonKey = requiredEnv('SUPABASE_ANON_KEY')
   const serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY')
-  const xaiKey = Deno.env.get('XAI_API_KEY') ?? ''
+  const openaiKey = Deno.env.get('OPENAI_API_KEY') ?? ''
+  const model = parseOpenAIModel(requiredEnv('OPENAI_MODEL'))
+  const reasoningEffort = parseOpenAIReasoningEffort(requiredEnv('OPENAI_REASONING_EFFORT'))
 
   // User-scoped client: JWT from caller → getUser + is_ledger_member (auth.uid()).
   const userClient = createClient(supabaseUrl, anonKey, {
@@ -38,8 +74,8 @@ function buildDeps(req: Request): GatewayDeps {
 
   return {
     aiFeaturesEnabledEnv: Deno.env.get('AI_FEATURES_ENABLED'),
-    // Team model access varies; set without code change when 404 "model does not exist".
-    defaultModel: Deno.env.get('XAI_DEFAULT_MODEL'),
+    model,
+    reasoningEffort,
 
     async getUserId(authHeader) {
       if (!authHeader || !authHeader.toLowerCase().startsWith('bearer ')) {
@@ -54,16 +90,18 @@ function buildDeps(req: Request): GatewayDeps {
 
     async isInAppAiEnabled(userId) {
       // Dark launch: missing row → disabled (default false).
+      // Effective opt-in also requires disclosure_version == current so consent
+      // for a prior foreign processor (e.g. xAI) cannot authorize OpenAI.
       const { data, error } = await admin
         .from('ai_user_settings')
-        .select('in_app_ai_enabled')
+        .select('in_app_ai_enabled, disclosure_version')
         .eq('user_id', userId)
         .maybeSingle()
       if (error) {
         console.error(JSON.stringify({ audit: 'settings_error', error: error.message }))
         return false
       }
-      return data?.in_app_ai_enabled === true
+      return isEffectiveInAppAiOptIn(data?.in_app_ai_enabled, data?.disclosure_version)
     },
 
     async isLedgerMember(_userId, ledgerId, minRole) {
@@ -82,7 +120,7 @@ function buildDeps(req: Request): GatewayDeps {
     async lookupCache({ ledgerId, feature, periodKey, dataVersionHash }) {
       const { data, error } = await admin
         .from('ai_insight_cache')
-        .select('result_json, model, expires_at')
+        .select('result_json, model, reasoning_effort, expires_at')
         .eq('ledger_id', ledgerId)
         .eq('feature', feature)
         .eq('period_key', periodKey)
@@ -92,7 +130,11 @@ function buildDeps(req: Request): GatewayDeps {
       if (data.expires_at && new Date(data.expires_at).getTime() <= Date.now()) {
         return null
       }
-      return { result: data.result_json, model: data.model as string }
+      return {
+        result: data.result_json,
+        model: data.model as string,
+        reasoningEffort: typeof data.reasoning_effort === 'string' ? data.reasoning_effort : null,
+      }
     },
 
     async claimQuota(userId, feature, tokenEstimate) {
@@ -133,7 +175,15 @@ function buildDeps(req: Request): GatewayDeps {
       if (error) throw error
     },
 
-    async upsertCache({ ledgerId, feature, periodKey, dataVersionHash, result, model }) {
+    async upsertCache({
+      ledgerId,
+      feature,
+      periodKey,
+      dataVersionHash,
+      result,
+      model,
+      reasoningEffort,
+    }) {
       const expiresAt = new Date(Date.now() + CACHE_TTL_MS).toISOString()
       const { error } = await admin.from('ai_insight_cache').upsert(
         {
@@ -143,6 +193,7 @@ function buildDeps(req: Request): GatewayDeps {
           data_version_hash: dataVersionHash,
           result_json: result,
           model,
+          reasoning_effort: reasoningEffort,
           expires_at: expiresAt,
         },
         { onConflict: 'ledger_id,feature,period_key,data_version_hash' },
@@ -153,19 +204,28 @@ function buildDeps(req: Request): GatewayDeps {
       await admin.from('ai_insight_cache').delete().lt('expires_at', new Date().toISOString())
     },
 
-    async callXai({ feature, input, model, maxTokens }) {
-      if (!xaiKey) {
+    async callOpenAI({
+      feature,
+      input,
+      model,
+      maxOutputTokens,
+      reasoningEffort,
+      safetyIdentifier,
+    }) {
+      if (!openaiKey) {
         // Common after deploy when secrets were not set/propagated.
-        throw new XaiError('upstream', 'XAI_API_KEY is not configured', {
+        throw new OpenAIError('upstream', 'OPENAI_API_KEY is not configured', {
           reason: 'missing_key',
         })
       }
-      return callXaiStructured({
-        apiKey: xaiKey,
+      return callOpenAIStructured({
+        apiKey: openaiKey,
         feature,
         input,
         model,
-        maxTokens,
+        maxOutputTokens,
+        reasoningEffort,
+        safetyIdentifier,
       })
     },
 

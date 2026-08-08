@@ -223,7 +223,7 @@ $$;
 revoke all on function ai_quota_resolve_user(uuid) from public;
 
 -- ── 5. claim_ai_quota ────────────────────────────────────────────────────────
--- Atomic pre-xAI claim: +1 request (feature day), reserve tokens on '_total'.
+-- Atomic pre-provider claim: +1 request (feature day), reserve tokens on '_total'.
 -- Double-spend safe via single transaction + ON CONFLICT … WHERE … RETURNING.
 --
 -- Returns jsonb:
@@ -370,7 +370,7 @@ revoke all on function claim_ai_quota(text, bigint, uuid) from public;
 grant execute on function claim_ai_quota(text, bigint, uuid) to service_role;
 
 -- ── 6. settle_ai_quota ───────────────────────────────────────────────────────
--- After successful xAI: convert reserved estimate → actual prompt/completion tokens.
+-- After a successful provider call: convert reserved estimate → actual prompt/completion tokens.
 -- p_token_estimate must match the estimate used at claim (Edge holds it).
 -- If actual > estimate, usage may exceed cap for this settle; next claim still blocked.
 create or replace function settle_ai_quota(

@@ -1,5 +1,5 @@
 /**
- * Per-feature JSON Schema (strict) for xAI structured output + system prompts.
+ * Per-feature JSON Schema (strict) for OpenAI structured output + system prompts.
  * Spec: docs/4 §4.6, §5.1, §7.2
  */
 
