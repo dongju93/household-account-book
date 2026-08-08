@@ -7,7 +7,7 @@ Provider-paid in-app AI entrypoint. Spec: `docs/4` §4.6.1 / §7.1, tracker S02.
 ```text
 parse body (≤32 KiB) → getUser → AI_FEATURES_ENABLED → in_app_ai_enabled
   → is_ledger_member(minRole) → feature input limits
-  → cache hit? (same model + schema-valid; no quota) → claim_ai_quota
+  → cache hit? (same model + reasoning effort + schema-valid; no quota) → claim_ai_quota
   → OpenAI Responses API (20s, strict JSON Schema + domain validate)
   → settle | refund
   (settle/refund use claim's KST `day` so midnight-crossing calls release the same reservation)

@@ -34,6 +34,8 @@ import { parseGatewayBody, periodKeyFor, validateFeatureResult } from './validat
 export interface CachedInsight {
   result: unknown
   model: string
+  /** Null for cache rows created before reasoning effort became part of the identity. */
+  reasoningEffort: string | null
 }
 
 export interface GatewayDeps {
@@ -77,6 +79,7 @@ export interface GatewayDeps {
     dataVersionHash: string
     result: unknown
     model: string
+    reasoningEffort: OpenAIReasoningEffort
   }) => Promise<void>
   callOpenAI: (args: {
     feature: AiFeature
@@ -215,7 +218,12 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
     })
     // Skip malformed cache rows (legacy poison or schema drift) and regenerate
     // instead of returning a shape that crashes the card until TTL expiry.
-    if (hit && hit.model === model && validateFeatureResult(feature, hit.result).ok) {
+    if (
+      hit &&
+      hit.model === model &&
+      hit.reasoningEffort === effort &&
+      validateFeatureResult(feature, hit.result).ok
+    ) {
       const body: AiGatewayOkResponse = {
         ok: true,
         feature,
@@ -327,6 +335,7 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
           dataVersionHash,
           result: openai.content,
           model: openai.model,
+          reasoningEffort: effort,
         })
       } catch {
         // non-fatal

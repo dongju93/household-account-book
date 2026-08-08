@@ -117,7 +117,7 @@ function buildDeps(req: Request): GatewayDeps {
     async lookupCache({ ledgerId, feature, periodKey, dataVersionHash }) {
       const { data, error } = await admin
         .from('ai_insight_cache')
-        .select('result_json, model, expires_at')
+        .select('result_json, model, reasoning_effort, expires_at')
         .eq('ledger_id', ledgerId)
         .eq('feature', feature)
         .eq('period_key', periodKey)
@@ -127,7 +127,11 @@ function buildDeps(req: Request): GatewayDeps {
       if (data.expires_at && new Date(data.expires_at).getTime() <= Date.now()) {
         return null
       }
-      return { result: data.result_json, model: data.model as string }
+      return {
+        result: data.result_json,
+        model: data.model as string,
+        reasoningEffort: typeof data.reasoning_effort === 'string' ? data.reasoning_effort : null,
+      }
     },
 
     async claimQuota(userId, feature, tokenEstimate) {
@@ -168,7 +172,15 @@ function buildDeps(req: Request): GatewayDeps {
       if (error) throw error
     },
 
-    async upsertCache({ ledgerId, feature, periodKey, dataVersionHash, result, model }) {
+    async upsertCache({
+      ledgerId,
+      feature,
+      periodKey,
+      dataVersionHash,
+      result,
+      model,
+      reasoningEffort,
+    }) {
       const expiresAt = new Date(Date.now() + CACHE_TTL_MS).toISOString()
       const { error } = await admin.from('ai_insight_cache').upsert(
         {
@@ -178,6 +190,7 @@ function buildDeps(req: Request): GatewayDeps {
           data_version_hash: dataVersionHash,
           result_json: result,
           model,
+          reasoning_effort: reasoningEffort,
           expires_at: expiresAt,
         },
         { onConflict: 'ledger_id,feature,period_key,data_version_hash' },

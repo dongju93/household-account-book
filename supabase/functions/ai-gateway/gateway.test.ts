@@ -250,6 +250,7 @@ describe('S02 ai-gateway acceptance', () => {
           groundedMonth: '2026-07',
         },
         model: 'gpt-5.6-luna',
+        reasoningEffort: 'low',
       }),
     })
     const res = await postJson(insightBody(), deps)
@@ -269,6 +270,7 @@ describe('S02 ai-gateway acceptance', () => {
           groundedMonth: '2026-07',
         },
         model: 'legacy-provider-model',
+        reasoningEffort: 'low',
       }),
       callOpenAI: async () => ({
         content: {
@@ -288,12 +290,68 @@ describe('S02 ai-gateway acceptance', () => {
     expect(deps.openAiCalls).toBe(1)
   })
 
+  it('현재 reasoning effort와 다른 캐시 행은 miss로 처리한다', async () => {
+    const deps = makeDeps({
+      reasoningEffort: 'high',
+      lookupCache: async () => ({
+        result: {
+          bullets: VALID_INSIGHT_BULLETS,
+          groundedMonth: '2026-07',
+        },
+        model: 'gpt-5.6-luna',
+        reasoningEffort: 'low',
+      }),
+      callOpenAI: async (args) => ({
+        content: {
+          bullets: VALID_INSIGHT_BULLETS,
+          groundedMonth: '2026-07',
+        },
+        model: args.model,
+        promptTokens: 10,
+        completionTokens: 5,
+      }),
+    })
+
+    const res = await postJson(insightBody(), deps)
+    expect(res.status).toBe(200)
+    expect((await res.json()).cached).toBe(false)
+    expect(deps.claims).toBe(1)
+    expect(deps.openAiCalls).toBe(1)
+  })
+
+  it('새 캐시 행에 현재 reasoning effort를 저장한다', async () => {
+    let stored: Parameters<GatewayDeps['upsertCache']>[0] | undefined
+    const deps = makeDeps({
+      reasoningEffort: 'high',
+      upsertCache: async (args) => {
+        stored = args
+      },
+      callOpenAI: async (args) => ({
+        content: {
+          bullets: VALID_INSIGHT_BULLETS,
+          groundedMonth: '2026-07',
+        },
+        model: args.model,
+        promptTokens: 10,
+        completionTokens: 5,
+      }),
+    })
+
+    const res = await postJson(insightBody(), deps)
+    expect(res.status).toBe(200)
+    expect(stored).toMatchObject({
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'high',
+    })
+  })
+
   it('malformed cache row is treated as miss (regenerate, not serve poison)', async () => {
     const deps = makeDeps({
       lookupCache: async () => ({
         // Valid JSON historically cached, but bullets is not a string[].
         result: { bullets: 'not-an-array', groundedMonth: '2026-07' },
         model: 'gpt-5.6-luna',
+        reasoningEffort: 'low',
       }),
       callOpenAI: async () => ({
         content: {
