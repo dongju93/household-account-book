@@ -71,6 +71,17 @@ export function todayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/**
+ * Shifts an ISO 'YYYY-MM-DD' date by `delta` days, crossing month/year
+ * boundaries. Built on UTC so a DST shift can never move the result to the
+ * neighbouring day — these are calendar dates, not instants.
+ */
+export function addDaysISO(iso: string, delta: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const shifted = new Date(Date.UTC(y, m - 1, d + delta))
+  return shifted.toISOString().slice(0, 10)
+}
+
 /** Calendar length of a month (28–31). */
 export function daysInCalendarMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate()

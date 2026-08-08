@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { buildPeriodExplainInput } from '../../ai/buildPeriodExplainInput'
 import { useAsyncData } from '../../app/useAsyncData'
 import { useDocumentTitle } from '../../app/useDocumentTitle'
 import { useRefresh } from '../../app/useRefresh'
@@ -17,6 +18,7 @@ import {
 import { currentYearMonth, lastMonths, monthWindowRange } from '../../lib/month'
 import { AppBar, Chip, ErrorBanner, ReportsSkeleton, ScreenBody } from '../../ui'
 import { useStatsQnaTools } from '../../webmcp/useStatsQnaTools'
+import { AiPeriodExplainCard } from './AiPeriodExplainCard'
 import { ReportsCharts } from './ReportsCharts'
 
 // Widest window any qna_* tool can be asked for (periodMonths enum = REPORT_PERIODS).
@@ -73,6 +75,14 @@ export function ReportsPage() {
             </Chip>
           ))}
         </div>
+
+        {ledgerId && (
+          <AiPeriodExplainCard
+            ledgerId={ledgerId}
+            input={buildPeriodExplainInput({ period, trend, breakdown })}
+            ready={ready}
+          />
+        )}
 
         {loading && <ReportsSkeleton />}
         {error && (

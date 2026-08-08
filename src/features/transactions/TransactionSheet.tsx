@@ -1,13 +1,23 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import { useValidatedSubmit } from '../../app/useValidatedSubmit'
-import { createTransaction, updateTransaction } from '../../data/transactions'
+import {
+  createTransaction,
+  fetchNearDuplicateCandidates,
+  updateTransaction,
+} from '../../data/transactions'
 import type { NlTxnDraftNormalized } from '../../domain/ai/nlTxnDraft'
 import { FUND_TYPE_ITEMS } from '../../domain/fundType'
 import type { FundType } from '../../domain/fundType'
+import {
+  type DuplicateCandidateTxn,
+  findNearDuplicatesForDraft,
+  normalizeMemo,
+} from '../../domain/fuzzyDuplicates'
 import type { Category, Transaction } from '../../domain/types'
 import { validateTransactionInput } from '../../domain/validation'
-import { todayISO } from '../../lib/month'
+import { won } from '../../lib/format'
+import { formatDayHeader, todayISO } from '../../lib/month'
 import {
   AmountInput,
   BottomSheet,
@@ -21,6 +31,7 @@ import {
   Toggle,
 } from '../../ui'
 import { NlDraftField } from './NlDraftField'
+import { useMemoCategorySuggestions } from './useMemoCategorySuggestions'
 
 /**
  * Create or edit a transaction. In create mode it offers 저장 후 계속 입력, which
@@ -54,10 +65,27 @@ export function TransactionSheet({
   const [keepOpen, setKeepOpen] = useState(false)
   // Remount key for the NL field: bumping it clears text/banner/warnings after 저장 후 계속.
   const [nlGeneration, setNlGeneration] = useState(0)
+  // §5.14 pre-save guard. The warning carries the *form state it was raised for*
+  // rather than a boolean, and that one key does double duty: the banner renders
+  // only while the form still matches it, and a second 저장 press only proceeds
+  // for that same key. Editing any field after the warning therefore both hides
+  // the stale list and revokes the acknowledgement — "acknowledged a draft the
+  // user has since changed" is not a representable state.
+  const [duplicateWarning, setDuplicateWarning] = useState<{
+    formKey: string
+    txns: DuplicateCandidateTxn[]
+  } | null>(null)
   const { errors, submitError, saving, run } = useValidatedSubmit()
   const amountErrorId = useId()
   const categoryErrorId = useId()
   const dateErrorId = useId()
+
+  const { suggestions } = useMemoCategorySuggestions({
+    ledgerId,
+    memo,
+    categories,
+    enabled: open,
+  })
 
   const typeCategories = categories.filter((c) => c.type === type)
 
@@ -81,6 +109,66 @@ export function TransactionSheet({
     if (draft.memo != null) setMemo(draft.memo)
   }
 
+  /**
+   * Rows already on record that this draft would duplicate.
+   *
+   * Fails **open**: if the lookup errors (offline, RLS, timeout) the save
+   * proceeds unwarned. A duplicate is a nuisance; a guard that blocks a
+   * legitimate save because a read failed is a broken app.
+   */
+  async function findExistingNearDuplicates(value: {
+    date: string
+    amount: number
+    categoryId: string
+    type: FundType
+    memo: string | null
+  }): Promise<DuplicateCandidateTxn[]> {
+    try {
+      const existing = await fetchNearDuplicateCandidates(ledgerId, {
+        txnDate: value.date,
+        type: value.type,
+        amount: value.amount,
+        categoryId: value.categoryId,
+      })
+      return findNearDuplicatesForDraft(
+        {
+          txnDate: value.date,
+          type: value.type,
+          amount: value.amount,
+          categoryId: value.categoryId,
+          memo: value.memo,
+        },
+        existing,
+        { excludeId: transaction?.id ?? null },
+      )
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Identity of the current form state for guard purposes. Built from the raw
+   * fields rather than the validated draft so it can be recomputed on every
+   * render without running validation. Two different raw states that validate to
+   * the same transaction (e.g. "10000" vs " 10000") simply re-run the guard —
+   * the conservative direction.
+   */
+  const formKey = [date, amount.trim(), categoryId, type, normalizeMemo(memo)].join('|')
+  const showDuplicateWarning = duplicateWarning?.formKey === formKey
+
+  // `handleSubmit` closes over the form state as of the press that started it,
+  // and the inputs stay editable while the duplicate lookup is in flight — so
+  // that closure alone cannot answer "is this still what the user is looking
+  // at?" after an await. This ref mirrors the *committed* key so the post-await
+  // check compares against what is actually on screen. Written in an effect
+  // rather than during render on purpose: a render React discards (StrictMode,
+  // an interrupted concurrent render) must not move the identity a write is
+  // gated on to state the user never saw.
+  const committedFormKeyRef = useRef(formKey)
+  useEffect(() => {
+    committedFormKeyRef.current = formKey
+  }, [formKey])
+
   async function handleSubmit() {
     const category = categories.find((c) => c.id === categoryId) ?? null
     const ok = await run(
@@ -90,6 +178,25 @@ export function TransactionSheet({
           category,
         ),
       async (value) => {
+        // Guard runs on the *validated* draft, so it queries the integer amount
+        // that would actually be written — never the raw input string.
+        const pressedFormKey = formKey
+        if (!showDuplicateWarning) {
+          const matches = await findExistingNearDuplicates(value)
+          // The lookup is a network read the user can type straight through, and
+          // its answer describes the draft *as pressed*. If the form has moved
+          // on, neither outcome may be acted on: writing would persist values
+          // the user has already replaced, and warning would pin a banner to a
+          // draft that no longer exists. Drop the result — 저장 is enabled again
+          // the moment `saving` clears, and that press re-guards the new values.
+          if (committedFormKeyRef.current !== pressedFormKey) return
+          if (matches.length > 0) {
+            setDuplicateWarning({ formKey: pressedFormKey, txns: matches })
+            return // warn and stop; a second 저장 press on the same form writes.
+          }
+        }
+        setDuplicateWarning(null)
+
         const write = {
           categoryId: value.categoryId,
           type: value.type,
@@ -156,6 +263,41 @@ export function TransactionSheet({
 
         <div className="flex flex-col gap-1.5">
           <span className="text-caption font-semibold text-ink2">카테고리</span>
+          {suggestions.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 rounded-control bg-fill1 px-2.5 py-1.5 text-caption">
+              <span className="font-semibold text-ink2">추천:</span>
+              {suggestions.map((s) => (
+                <Chip
+                  key={s.categoryId}
+                  active={s.categoryId === categoryId}
+                  density="compact"
+                  onClick={() => {
+                    // Deliberately bypasses changeType (which resets the category):
+                    // a suggestion applies type + category as one unit, like applyNlDraft.
+                    if (s.type !== type) {
+                      setType(s.type)
+                    }
+                    setCategoryId(s.categoryId)
+                  }}
+                >
+                  {s.categoryName}
+                  {s.type !== type && (
+                    <span className="ml-1 text-[10px] opacity-75">
+                      (
+                      {s.type === 'income'
+                        ? '수입'
+                        : s.type === 'expense'
+                          ? '지출'
+                          : s.type === 'saving'
+                            ? '저축'
+                            : '투자'}
+                      )
+                    </span>
+                  )}
+                </Chip>
+              ))}
+            </div>
+          )}
           {typeCategories.length === 0 ? (
             <p className="text-caption text-ink2">
               이 구분의 활성 카테고리가 없습니다. 설정에서 추가하세요.
@@ -220,10 +362,36 @@ export function TransactionSheet({
           </label>
         )}
 
+        {/* §5.14: a warning, not a block. The rows are listed so the user can
+            recognise their own entry rather than take the app's word for it, and
+            the only actions offered are 저장 (proceed) and closing the sheet —
+            nothing here deletes or edits the existing rows (§5.7). */}
+        {showDuplicateWarning && (
+          <div
+            role="alert"
+            className="flex flex-col gap-1.5 rounded-surface border border-status-warning/35 bg-status-warning/8 px-3 py-2.5"
+          >
+            <p className="text-caption font-semibold text-status-warning">
+              비슷한 거래가 이미 {duplicateWarning.txns.length}건 있습니다. 중복 입력일 수 있습니다.
+            </p>
+            <ul className="text-caption flex flex-col gap-0.5 text-ink2">
+              {duplicateWarning.txns.map((t) => (
+                <li key={t.id} className="tnum">
+                  {formatDayHeader(t.txnDate)} · {won(t.amount)}
+                  {t.memo?.trim() ? ` · ${t.memo.trim()}` : ''}
+                </li>
+              ))}
+            </ul>
+            <p className="text-caption text-ink2">
+              그래도 저장하려면 저장을 한 번 더 누르세요. 기존 거래는 그대로 유지됩니다.
+            </p>
+          </div>
+        )}
+
         {submitError && <ErrorBanner message={submitError} />}
 
         <Button onClick={handleSubmit} disabled={saving}>
-          {saving ? '저장 중…' : '저장'}
+          {saving ? '저장 중…' : showDuplicateWarning ? '그래도 저장' : '저장'}
         </Button>
 
         {/* §6.5: two-step inline delete, unchanged. Only the confirming step's

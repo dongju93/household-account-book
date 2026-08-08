@@ -113,12 +113,35 @@ describe('findDuplicateCandidates', () => {
     expect(findDuplicateCandidates(txns, names, JUN_2026)).toHaveLength(1)
   })
 
-  it('does not group transactions differing only by date', () => {
+  // §5.7 widened this finder past the exact date|amount|category|memo key: a
+  // next-day re-entry is now reported, labelled 의심 rather than asserted.
+  it('groups a next-day repeat and labels it as suspected', () => {
     const txns = [
       txn({ txnDate: '2026-06-05', amount: 20_000, memo: '점심' }),
       txn({ txnDate: '2026-06-06', amount: 20_000, memo: '점심' }),
     ]
+    const findings = findDuplicateCandidates(txns, names, JUN_2026)
+    expect(findings).toHaveLength(1)
+    expect(findings[0].label).toContain('2026-06-05~2026-06-06')
+    expect(findings[0].label).toContain('의심')
+  })
+
+  it('does not group transactions two days apart', () => {
+    const txns = [
+      txn({ txnDate: '2026-06-05', amount: 20_000, memo: '점심' }),
+      txn({ txnDate: '2026-06-07', amount: 20_000, memo: '점심' }),
+    ]
     expect(findDuplicateCandidates(txns, names, JUN_2026)).toEqual([])
+  })
+
+  it('does not narrow navigation by memo when the group is held together by similar memos', () => {
+    const txns = [
+      txn({ txnDate: '2026-06-05', amount: 20_000, memo: '점심' }),
+      txn({ txnDate: '2026-06-05', amount: 20_000, memo: null }),
+    ]
+    const findings = findDuplicateCandidates(txns, names, JUN_2026)
+    expect(findings).toHaveLength(1)
+    expect(findings[0].nav.memoContains).toBeUndefined()
   })
 
   it('does not group transactions differing only by amount', () => {

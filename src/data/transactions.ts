@@ -1,5 +1,6 @@
 import type { FundType } from '../domain/fundType'
 import type { Transaction, TxnSource } from '../domain/types'
+import { addDaysISO } from '../lib/month'
 import { supabase } from '../lib/supabase'
 import { mapTransaction } from './mappers'
 
@@ -78,6 +79,76 @@ export async function listAllTransactions(
     cursor = page.nextCursor
   } while (cursor)
   return all
+}
+
+export interface MemoHistoryItem {
+  categoryId: string
+  memo: string | null
+}
+
+/**
+ * Fetch recent transactions whose memo matches the draft in EITHER substring
+ * direction — "stored contains new" (`스타벅스 강남점` ⊃ `스타벅스`) or "new
+ * contains stored" (`스타벅스` ⊂ `스타벅스 강남점`). The domain matcher
+ * `suggestCategoriesFromMemo` already handles either-side matches; this query
+ * must surface rows for both so the matcher actually sees them.
+ *
+ * The reverse direction ("new contains stored") cannot be expressed through
+ * PostgREST — `ilike`/`imatch` always place the column on the left, so the
+ * stored value can never be the haystack for the draft as pattern — so the
+ * matching runs in the `search_memo_history` RPC (migration 0014), which uses
+ * case-insensitive `strpos` on the lowercased pair for both directions (plain
+ * substring, never a regex with the column as pattern, so stored memo
+ * metacharacters stay literal). Read-only: returns rows; never gates a write.
+ */
+export async function fetchMemoHistory(
+  ledgerId: string,
+  memo: string,
+  limit = 50,
+): Promise<MemoHistoryItem[]> {
+  const trimmed = memo.trim()
+  if (!trimmed || !ledgerId) return []
+
+  const { data, error } = await supabase.rpc('search_memo_history', {
+    p_ledger: ledgerId,
+    p_memo: trimmed,
+    p_limit: limit,
+  })
+
+  if (error) throw error
+  return ((data ?? []) as Array<{ category_id: string; memo: string | null }>).map((row) => ({
+    categoryId: row.category_id,
+    memo: row.memo,
+  }))
+}
+
+/**
+ * Rows that could be near-duplicates of a draft (§5.14 pre-save guard).
+ *
+ * Narrowed server-side on exactly the fields `isNearDuplicate` requires to match
+ * exactly — type, amount, category — plus the ±1-day window. The fuzzy part
+ * (memo similarity) stays in the domain layer, so the rule lives in one place and
+ * this query stays index-friendly (`transactions_ledger_type_date_idx`).
+ * Read-only; it exists so the guard can warn, never to gate a write server-side.
+ */
+export async function fetchNearDuplicateCandidates(
+  ledgerId: string,
+  draft: { txnDate: string; type: FundType; amount: number; categoryId: string },
+): Promise<Transaction[]> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('ledger_id', ledgerId)
+    .eq('type', draft.type)
+    .eq('amount', draft.amount)
+    .eq('category_id', draft.categoryId)
+    .gte('txn_date', addDaysISO(draft.txnDate, -1))
+    .lte('txn_date', addDaysISO(draft.txnDate, 1))
+    .order('txn_date', { ascending: true })
+    .order('id', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []).map(mapTransaction)
 }
 
 export interface TxnWrite {
