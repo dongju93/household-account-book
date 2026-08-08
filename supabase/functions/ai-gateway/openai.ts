@@ -14,6 +14,11 @@ import { buildFeaturePrompt } from './schemas.ts'
 import type { OpenAIResult } from './types.ts'
 import { validateFeatureResult } from './validate.ts'
 
+export interface OpenAIUsage {
+  promptTokens: number
+  completionTokens: number
+}
+
 /** Why the OpenAI call failed - ops logs only; never sent to the client. */
 export type OpenAIFailureReason =
   | 'timeout'
@@ -30,16 +35,19 @@ export class OpenAIError extends Error {
   /** HTTP status from api.openai.com when reason is `http`. */
   readonly status?: number
   readonly reason?: OpenAIFailureReason
+  /** Provider-reported usage when the failed response was still billed. */
+  readonly usage?: OpenAIUsage
   constructor(
     kind: 'upstream' | 'parse',
     message: string,
-    opts?: { status?: number; reason?: OpenAIFailureReason },
+    opts?: { status?: number; reason?: OpenAIFailureReason; usage?: OpenAIUsage },
   ) {
     super(message)
     this.kind = kind
     this.name = 'OpenAIError'
     this.status = opts?.status
     this.reason = opts?.reason
+    this.usage = opts?.usage
   }
 }
 
@@ -62,6 +70,7 @@ export async function callOpenAIStructured(options: {
   const prompt = buildFeaturePrompt(options.feature, options.input)
 
   let lastParseError: Error | null = null
+  let billedUsage: OpenAIUsage = { promptTokens: 0, completionTokens: 0 }
   for (let attempt = 0; attempt < 2; attempt++) {
     const raw = await createResponse({
       fetchImpl,
@@ -76,6 +85,7 @@ export async function callOpenAIStructured(options: {
       schemaName: prompt.schemaName,
       schema: prompt.schema,
     })
+    billedUsage = addUsage(billedUsage, raw.usage)
 
     try {
       const content = parseJsonContent(raw.contentText)
@@ -90,8 +100,8 @@ export async function callOpenAIStructured(options: {
         // Cache identity follows the validated deployment model, not a provider
         // snapshot id that may differ from the requested alias.
         model: options.model,
-        promptTokens: raw.promptTokens,
-        completionTokens: raw.completionTokens,
+        promptTokens: billedUsage.promptTokens,
+        completionTokens: billedUsage.completionTokens,
       }
     } catch (e) {
       lastParseError = e instanceof Error ? e : new Error(String(e))
@@ -100,6 +110,7 @@ export async function callOpenAIStructured(options: {
 
   throw new OpenAIError('parse', lastParseError?.message ?? 'structured output parse failed', {
     reason: 'parse',
+    usage: billedUsage,
   })
 }
 
@@ -117,8 +128,7 @@ async function createResponse(args: {
   schema: Record<string, unknown>
 }): Promise<{
   contentText: string
-  promptTokens: number
-  completionTokens: number
+  usage: OpenAIUsage
 }> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), args.timeoutMs)
@@ -168,6 +178,7 @@ async function createResponse(args: {
     }
 
     const data = (await res.json()) as OpenAIResponse
+    const usage = usageFromResponse(data)
     if (data.status !== 'completed') {
       const detail = data.incomplete_details?.reason
       // `max_output_tokens` here means the budget ran out before a usable result,
@@ -180,19 +191,18 @@ async function createResponse(args: {
       throw new OpenAIError(
         'upstream',
         `OpenAI response ${data.status ?? 'incomplete'}${detail ? `: ${detail}` : ''}${hint}`,
-        { reason: 'incomplete' },
+        { reason: 'incomplete', usage },
       )
     }
 
-    const contentText = extractOutputText(data.output)
+    const contentText = extractOutputText(data.output, usage)
     if (contentText.length === 0) {
-      throw new OpenAIError('parse', 'empty response output', { reason: 'empty' })
+      throw new OpenAIError('parse', 'empty response output', { reason: 'empty', usage })
     }
 
     return {
       contentText,
-      promptTokens: Number(data.usage?.input_tokens ?? 0),
-      completionTokens: Number(data.usage?.output_tokens ?? 0),
+      usage,
     }
   } catch (e) {
     if (e instanceof OpenAIError) throw e
@@ -221,13 +231,16 @@ interface OpenAIResponse {
   usage?: { input_tokens?: number; output_tokens?: number }
 }
 
-function extractOutputText(output: OpenAIResponse['output']): string {
+function extractOutputText(output: OpenAIResponse['output'], usage: OpenAIUsage): string {
   const chunks: string[] = []
   for (const item of output ?? []) {
     if (item.type !== 'message') continue
     for (const content of item.content ?? []) {
       if (content.type === 'refusal') {
-        throw new OpenAIError('upstream', 'OpenAI refused the request', { reason: 'refusal' })
+        throw new OpenAIError('upstream', 'OpenAI refused the request', {
+          reason: 'refusal',
+          usage,
+        })
       }
       if (content.type === 'output_text' && typeof content.text === 'string') {
         chunks.push(content.text)
@@ -235,6 +248,20 @@ function extractOutputText(output: OpenAIResponse['output']): string {
     }
   }
   return chunks.join('')
+}
+
+function usageFromResponse(data: OpenAIResponse): OpenAIUsage {
+  return {
+    promptTokens: Number(data.usage?.input_tokens ?? 0),
+    completionTokens: Number(data.usage?.output_tokens ?? 0),
+  }
+}
+
+function addUsage(left: OpenAIUsage, right: OpenAIUsage): OpenAIUsage {
+  return {
+    promptTokens: left.promptTokens + right.promptTokens,
+    completionTokens: left.completionTokens + right.completionTokens,
+  }
 }
 
 /** Strip credential-like substrings from provider error bodies before logging. */

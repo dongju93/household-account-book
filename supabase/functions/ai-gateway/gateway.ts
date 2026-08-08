@@ -278,7 +278,20 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
       safetyIdentifier,
     })
   } catch (e) {
-    await safeRefund(deps, userId, feature, tokenEstimate, claimDay)
+    const billedUsage = e instanceof OpenAIError ? e.usage : undefined
+    if (billedUsage) {
+      await safeSettle(
+        deps,
+        userId,
+        feature,
+        billedUsage.promptTokens,
+        billedUsage.completionTokens,
+        tokenEstimate,
+        claimDay,
+      )
+    } else {
+      await safeRefund(deps, userId, feature, tokenEstimate, claimDay)
+    }
     const code = e instanceof OpenAIError && e.kind === 'parse' ? 'parse' : 'upstream'
     // Client always gets the generic Korean copy; ops get the real cause.
     const message = code === 'parse' ? MESSAGES.parse : MESSAGES.upstream
@@ -295,7 +308,7 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
       user_id: userId,
       feature,
       model,
-      tokens: 0,
+      tokens: billedUsage ? billedUsage.promptTokens + billedUsage.completionTokens : 0,
       latency_ms: deps.nowMs() - started,
       cached: false,
       ledger_id: ledgerId,
@@ -384,5 +397,21 @@ async function safeRefund(
     await deps.refundQuota(userId, feature, tokenEstimate, claimDay)
   } catch {
     // best-effort
+  }
+}
+
+async function safeSettle(
+  deps: GatewayDeps,
+  userId: string,
+  feature: AiFeature,
+  promptTokens: number,
+  completionTokens: number,
+  tokenEstimate: number,
+  claimDay: string,
+): Promise<void> {
+  try {
+    await deps.settleQuota(userId, feature, promptTokens, completionTokens, tokenEstimate, claimDay)
+  } catch {
+    // OpenAI already billed; leave the reservation in place when settlement fails.
   }
 }

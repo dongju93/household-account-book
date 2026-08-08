@@ -412,6 +412,38 @@ describe('S02 ai-gateway acceptance', () => {
     expect(audit?.error_detail).toContain('401')
   })
 
+  it('provider usage가 있는 실패는 refund하지 않고 실제 사용량으로 settle한다', async () => {
+    let settled: { promptTokens: number; completionTokens: number; claimDay: string } | undefined
+    let auditTokens: number | undefined
+    const deps = makeDeps({
+      callOpenAI: async () => {
+        throw new OpenAIError('upstream', 'OpenAI response incomplete: max_output_tokens', {
+          reason: 'incomplete',
+          usage: { promptTokens: 120, completionTokens: 16_400 },
+        })
+      },
+      settleQuota: async (_userId, _feature, promptTokens, completionTokens, _estimate, day) => {
+        settled = { promptTokens, completionTokens, claimDay: day }
+      },
+      logAudit: (entry) => {
+        auditTokens = entry.tokens
+      },
+    })
+
+    const res = await postJson(baseNlBody(), deps)
+
+    expect(res.status).toBe(502)
+    expect(deps.claims).toBe(1)
+    expect(deps.settles).toBe(1)
+    expect(deps.refunds).toBe(0)
+    expect(settled).toEqual({
+      promptTokens: 120,
+      completionTokens: 16_400,
+      claimDay: '2026-07-11',
+    })
+    expect(auditTokens).toBe(16_520)
+  })
+
   it('성공 경로: claim -> OpenAI -> settle', async () => {
     let settleDay: string | undefined
     const deps = makeDeps({

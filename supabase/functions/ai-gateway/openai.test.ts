@@ -98,7 +98,11 @@ describe('OpenAI Responses API boundary', () => {
 
     await expect(callOpenAIStructured(requestOptions(fetchImpl))).rejects.toMatchObject<
       Partial<OpenAIError>
-    >({ kind: 'upstream', reason: 'refusal' })
+    >({
+      kind: 'upstream',
+      reason: 'refusal',
+      usage: { promptTokens: 20, completionTokens: 4 },
+    })
   })
 
   it('reports a reasoning-truncated response with both budget knobs, without retrying', async () => {
@@ -121,11 +125,44 @@ describe('OpenAI Responses API boundary', () => {
 
     expect(err).toBeInstanceOf(OpenAIError)
     expect((err as OpenAIError).reason).toBe('incomplete')
+    expect((err as OpenAIError).usage).toEqual({
+      promptTokens: 120,
+      completionTokens: 16_400,
+    })
     // Ops must see which knob to move without reproducing the request.
     expect((err as OpenAIError).message).toContain('max_output_tokens=16400')
     expect((err as OpenAIError).message).toContain('effort=high')
     // Retrying a budget truncation just bills the same reasoning twice.
     expect(calls).toBe(1)
+  })
+
+  it('includes every billed parse attempt in the final failure usage', async () => {
+    let calls = 0
+    const fetchImpl: typeof fetch = async () => {
+      calls++
+      return new Response(
+        JSON.stringify({
+          status: 'completed',
+          output: [
+            {
+              type: 'message',
+              content: [{ type: 'output_text', text: '{not-json' }],
+            },
+          ],
+          usage: { input_tokens: 30, output_tokens: 7 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      )
+    }
+
+    const err = await callOpenAIStructured(requestOptions(fetchImpl)).catch((e: unknown) => e)
+
+    expect(calls).toBe(2)
+    expect(err).toMatchObject<Partial<OpenAIError>>({
+      kind: 'parse',
+      reason: 'parse',
+      usage: { promptTokens: 60, completionTokens: 14 },
+    })
   })
 
   it('redacts project keys and bearer values from provider error previews', () => {
