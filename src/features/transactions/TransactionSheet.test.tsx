@@ -367,6 +367,48 @@ describe('TransactionSheet pre-save near-duplicate guard (S11 / PR-12)', () => {
     expect(mockedCreate).not.toHaveBeenCalled()
   })
 
+  it('drops a lookup whose form changed mid-flight instead of writing the pressed draft', async () => {
+    const user = userEvent.setup()
+    let release: ((rows: Transaction[]) => void) | undefined
+    mockedNearDuplicates.mockImplementation(
+      () =>
+        new Promise<Transaction[]>((resolve) => {
+          release = resolve
+        }),
+    )
+    mockedCreate.mockResolvedValue(undefined as never)
+    renderSheet()
+
+    await user.type(await screen.findByLabelText('금액'), '12000')
+    await user.click(screen.getByRole('button', { name: '식비' }))
+    await user.click(screen.getByRole('button', { name: '저장' }))
+    await waitFor(() => expect(mockedNearDuplicates).toHaveBeenCalledTimes(1))
+
+    // The user keeps typing through the in-flight read: 12000 → 120000.
+    await user.type(screen.getByLabelText('금액'), '0')
+
+    // The lookup comes back clean — but for a draft that is no longer on screen,
+    // so it must not write the pressed 12000.
+    await act(async () => {
+      release?.([])
+    })
+    expect(mockedCreate).not.toHaveBeenCalled()
+
+    // The sheet keeps the edited value, and the next press saves that one.
+    expect(screen.getByLabelText('금액')).toHaveValue('120000')
+    mockedNearDuplicates.mockResolvedValue([])
+    await user.click(screen.getByRole('button', { name: '저장' }))
+    await waitFor(() => {
+      expect(mockedCreate).toHaveBeenCalledWith(LEDGER_ID, {
+        categoryId: 'c-food',
+        type: 'expense',
+        txnDate: expect.any(String),
+        amount: 120000,
+        memo: null,
+      })
+    })
+  })
+
   it('saves without warning when the lookup fails (guard fails open)', async () => {
     const user = userEvent.setup()
     mockedNearDuplicates.mockRejectedValue(new Error('network'))

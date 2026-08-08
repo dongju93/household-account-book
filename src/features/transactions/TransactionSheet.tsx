@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import { useValidatedSubmit } from '../../app/useValidatedSubmit'
 import {
@@ -156,6 +156,19 @@ export function TransactionSheet({
   const formKey = [date, amount.trim(), categoryId, type, normalizeMemo(memo)].join('|')
   const showDuplicateWarning = duplicateWarning?.formKey === formKey
 
+  // `handleSubmit` closes over the form state as of the press that started it,
+  // and the inputs stay editable while the duplicate lookup is in flight — so
+  // that closure alone cannot answer "is this still what the user is looking
+  // at?" after an await. This ref mirrors the *committed* key so the post-await
+  // check compares against what is actually on screen. Written in an effect
+  // rather than during render on purpose: a render React discards (StrictMode,
+  // an interrupted concurrent render) must not move the identity a write is
+  // gated on to state the user never saw.
+  const committedFormKeyRef = useRef(formKey)
+  useEffect(() => {
+    committedFormKeyRef.current = formKey
+  }, [formKey])
+
   async function handleSubmit() {
     const category = categories.find((c) => c.id === categoryId) ?? null
     const ok = await run(
@@ -167,10 +180,18 @@ export function TransactionSheet({
       async (value) => {
         // Guard runs on the *validated* draft, so it queries the integer amount
         // that would actually be written — never the raw input string.
+        const pressedFormKey = formKey
         if (!showDuplicateWarning) {
           const matches = await findExistingNearDuplicates(value)
+          // The lookup is a network read the user can type straight through, and
+          // its answer describes the draft *as pressed*. If the form has moved
+          // on, neither outcome may be acted on: writing would persist values
+          // the user has already replaced, and warning would pin a banner to a
+          // draft that no longer exists. Drop the result — 저장 is enabled again
+          // the moment `saving` clears, and that press re-guards the new values.
+          if (committedFormKeyRef.current !== pressedFormKey) return
           if (matches.length > 0) {
-            setDuplicateWarning({ formKey, txns: matches })
+            setDuplicateWarning({ formKey: pressedFormKey, txns: matches })
             return // warn and stop; a second 저장 press on the same form writes.
           }
         }
