@@ -121,6 +121,40 @@ describe('findFuzzyDuplicateGroups', () => {
     expect(groups[0]).toMatchObject({ reason: 'similar_memo', sharedMemo: null })
   })
 
+  it('withholds sharedMemo when the grouped memos differ only in collapsed whitespace', () => {
+    const groups = findFuzzyDuplicateGroups([
+      txn({ id: 'a', txnDate: '2026-06-05', memo: '카페 라떼' }),
+      txn({ id: 'b', txnDate: '2026-06-05', memo: '카페   라떼' }),
+    ])
+    expect(groups).toHaveLength(1)
+    // Normalization makes these the same purchase, so the reason is still "exact"…
+    expect(groups[0].reason).toBe('exact')
+    // …but neither raw spelling is a literal substring of the other, so no single
+    // value narrows a memo search to *all* members.
+    expect(groups[0].sharedMemo).toBeNull()
+  })
+
+  it('withholds sharedMemo when the grouped memos differ only in case', () => {
+    const groups = findFuzzyDuplicateGroups([
+      txn({ id: 'a', txnDate: '2026-06-05', memo: 'Cafe Latte' }),
+      txn({ id: 'b', txnDate: '2026-06-05', memo: 'cafe latte' }),
+    ])
+    expect(groups).toHaveLength(1)
+    expect(groups[0].reason).toBe('exact')
+    expect(groups[0].sharedMemo).toBeNull()
+  })
+
+  it('keeps sharedMemo when only surrounding whitespace differs', () => {
+    const groups = findFuzzyDuplicateGroups([
+      txn({ id: 'a', txnDate: '2026-06-05', memo: '  점심  ' }),
+      txn({ id: 'b', txnDate: '2026-06-05', memo: '점심' }),
+    ])
+    expect(groups).toHaveLength(1)
+    // Trimming does not change what a substring search finds, so this narrowing
+    // value still describes every member.
+    expect(groups[0].sharedMemo).toBe('점심')
+  })
+
   it('never chains a group past a two-day span', () => {
     // 06-05 ~ 06-06 are near duplicates and 06-06 ~ 06-07 are too, but 06-05 and
     // 06-07 are not — an anchor-only check would merge all three.

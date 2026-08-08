@@ -52,9 +52,17 @@ export interface FuzzyDuplicateGroup {
   /** Latest member date — equal to `firstDate` unless `reason` is `adjacent_day`. */
   lastDate: string
   /**
-   * The shared memo (raw, trimmed) when every member carries the same non-blank
-   * memo; `null` otherwise. A group whose memos merely *resemble* each other has
-   * no single memo that describes it, so callers must not narrow a search by one.
+   * The shared memo (raw, trimmed) when every member carries the *byte-identical*
+   * non-blank memo; `null` otherwise. A group whose memos merely *resemble* each
+   * other has no single memo that describes it, so callers must not narrow a
+   * search by one.
+   *
+   * Identity here is deliberately stricter than `reason === 'exact'`, which is
+   * decided on normalized memos: '카페  라떼' and '카페 라떼' are the same purchase,
+   * but a literal `memo LIKE '%카페 라떼%'` does not find the double-spaced row.
+   * This field is a *narrowing* value, so returning one that matches only some
+   * members is worse than returning none — the caller falls back to a wider
+   * query that still contains every row.
    */
   sharedMemo: string | null
 }
@@ -112,6 +120,12 @@ function describeGroup(members: DuplicateCandidateTxn[]): FuzzyDuplicateGroup {
   const reason: FuzzyDuplicateReason =
     first.txnDate !== last.txnDate ? 'adjacent_day' : allSameMemo ? 'exact' : 'similar_memo'
 
+  // Compared raw (trim only), not normalized: `sharedMemo` is handed to callers as
+  // a literal memo search term, and normalization is exactly what makes two spellings
+  // that a literal search cannot both find compare equal.
+  const rawTrimmed = members.map((t) => (t.memo ?? '').trim())
+  const sharedRawMemo = rawTrimmed.every((m) => m === rawTrimmed[0]) ? rawTrimmed[0] : ''
+
   return {
     reason,
     txns: members,
@@ -120,7 +134,9 @@ function describeGroup(members: DuplicateCandidateTxn[]): FuzzyDuplicateGroup {
     categoryId: first.categoryId,
     firstDate: first.txnDate,
     lastDate: last.txnDate,
-    sharedMemo: allSameMemo && normalized[0] !== '' ? (first.memo ?? '').trim() : null,
+    // Identical raw memos are necessarily identical normalized ones, so a non-null
+    // `sharedMemo` always implies `allSameMemo`; the converse does not hold.
+    sharedMemo: sharedRawMemo === '' ? null : sharedRawMemo,
   }
 }
 
