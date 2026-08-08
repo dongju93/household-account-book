@@ -87,6 +87,7 @@ export const AI_LIMITS = {
     monthsMax: 12,
     topCategoriesMax: 5,
     topCategoriesNameMax: 40,
+    categoryChangesMax: 5,
   },
   monthCloseNarrative: {
     findingsMax: 40,
@@ -216,10 +217,11 @@ export interface MonthCloseNarrativeResult {
  * Bump when the Edge `period_explain` prompt or output contract changes.
  * Included in client hash payload so prompt-only deploys invalidate stale cache rows.
  */
-export const PERIOD_EXPLAIN_PROMPT_REV = 1
+export const PERIOD_EXPLAIN_PROMPT_REV = 2
 
 export interface PeriodExplainInput {
   periodKey: string
+  progress?: { asOf: string; dayOfMonth: number; daysInMonth: number }
   months: {
     month: string
     income: number
@@ -229,6 +231,13 @@ export interface PeriodExplainInput {
     balance: number
   }[]
   topCategories?: { name: string; amount: number; pct: number }[]
+  categoryChanges?: {
+    name: string
+    previousAmount: number
+    latestAmount: number
+    delta: number
+    deltaPct: number
+  }[]
 }
 
 export interface PeriodExplainResult {

@@ -28,6 +28,7 @@ const LEDGER_ID = 'ledger-1'
 
 const INPUT: PeriodExplainInput = {
   periodKey: '3m:2026-03_2026-05',
+  progress: { asOf: '2026-05-20', dayOfMonth: 20, daysInMonth: 31 },
   months: [
     {
       month: '2026-03',
@@ -55,6 +56,15 @@ const INPUT: PeriodExplainInput = {
     },
   ],
   topCategories: [{ name: '식비', amount: 800000, pct: 50 }],
+  categoryChanges: [
+    {
+      name: '식비',
+      previousAmount: 600000,
+      latestAmount: 500000,
+      delta: -100000,
+      deltaPct: -17,
+    },
+  ],
 }
 
 function aiSettings(enabled: boolean): AiUserSettings {
@@ -132,20 +142,24 @@ describe('AiPeriodExplainCard (S08 / PR-9)', () => {
     expect(mockedInvoke).not.toHaveBeenCalled()
   })
 
-  it('shows LLM bullets and sends input with dataVersionHash when ready', async () => {
+  it('shows the LLM interpretation and advice and sends input with dataVersionHash', async () => {
     mockedInvoke.mockResolvedValue(
       okResponse({
         bullets: [
-          '최근 3개월간 지출 비중이 가장 높은 항목은 식비입니다.',
-          '5월 수지가 ₩900,000으로 가장 높습니다.',
+          '5월에는 지출이 낮아진 흐름과 수지가 높아진 흐름이 함께 나타났지만, 같은 변화가 반복될지는 아직 확인이 필요합니다.',
+          '식비의 최근 거래를 반복 지출과 일회성 지출로 나눠 감소 원인을 확인하고, 다음 달에도 적용할 지출 규칙 하나를 정하면 완료입니다.',
         ],
         periodKey: '3m:2026-03_2026-05',
       }),
     )
     renderCard(true)
 
-    await screen.findByText('최근 3개월간 지출 비중이 가장 높은 항목은 식비입니다.')
-    expect(screen.getByText(/5월 수지가 ₩900,000으로 가장 높습니다\./)).toBeInTheDocument()
+    await screen.findByText(/5월에는 지출이 낮아진 흐름과 수지가 높아진 흐름/)
+    expect(
+      screen.getByText(/식비의 최근 거래를 반복 지출과 일회성 지출로 나눠/),
+    ).toBeInTheDocument()
+    expect(screen.getByText('핵심 해석')).toBeInTheDocument()
+    expect(screen.getByText('다음 행동')).toBeInTheDocument()
     expect(mockedInvoke).toHaveBeenCalledWith({
       feature: 'period_explain',
       ledgerId: LEDGER_ID,
@@ -167,17 +181,25 @@ describe('AiPeriodExplainCard (S08 / PR-9)', () => {
     // than staying absent until the provider answers.
     await screen.findByRole('status', LOADING)
 
-    settle(okResponse({ bullets: ['불릿1'], periodKey: '3m:2026-03_2026-05' }))
-    await screen.findByText('불릿1')
+    settle(
+      okResponse({
+        bullets: ['해석1', '조언1'],
+        periodKey: '3m:2026-03_2026-05',
+      }),
+    )
+    await screen.findByText('해석1')
     expect(screen.queryByRole('status', LOADING)).not.toBeInTheDocument()
   })
 
   it('shows the loading skeleton again after ready drops and returns', async () => {
     mockedInvoke.mockResolvedValue(
-      okResponse({ bullets: ['불릿1'], periodKey: '3m:2026-03_2026-05' }),
+      okResponse({
+        bullets: ['해석1', '조언1'],
+        periodKey: '3m:2026-03_2026-05',
+      }),
     )
     const { rerender } = renderCard(true)
-    await screen.findByText('불릿1')
+    await screen.findByText('해석1')
 
     let settle!: (res: AiGatewayOkResponse<PeriodExplainResult>) => void
     mockedInvoke.mockReturnValue(
@@ -193,8 +215,13 @@ describe('AiPeriodExplainCard (S08 / PR-9)', () => {
     rerender(tree(true))
 
     await screen.findByRole('status', LOADING)
-    settle(okResponse({ bullets: ['불릿2'], periodKey: '3m:2026-03_2026-05' }))
-    await screen.findByText('불릿2')
+    settle(
+      okResponse({
+        bullets: ['해석2', '조언2'],
+        periodKey: '3m:2026-03_2026-05',
+      }),
+    )
+    await screen.findByText('해석2')
   })
 
   it('stays hidden across a ready dip once flag_off has been seen', async () => {
@@ -225,27 +252,27 @@ describe('AiPeriodExplainCard (S08 / PR-9)', () => {
   it('rejects a response with periodKey mismatch', async () => {
     mockedInvoke.mockResolvedValue(
       okResponse({
-        bullets: ['불릿1', '불릿2'],
+        bullets: ['해석1', '조언1'],
         periodKey: '6m:2026-01_2026-06',
       }),
     )
     renderCard(true)
 
     await screen.findByText('응답이 요청한 기간과 일치하지 않습니다.')
-    expect(screen.queryByText('불릿1')).not.toBeInTheDocument()
+    expect(screen.queryByText('해석1')).not.toBeInTheDocument()
   })
 
   it('re-invokes gateway when 다시 생성 is clicked', async () => {
     const user = userEvent.setup()
     mockedInvoke.mockResolvedValue(
       okResponse({
-        bullets: ['불릿1', '불릿2'],
+        bullets: ['해석1', '조언1'],
         periodKey: '3m:2026-03_2026-05',
       }),
     )
     renderCard(true)
 
-    await screen.findByText('불릿1')
+    await screen.findByText('해석1')
     expect(mockedInvoke).toHaveBeenCalledTimes(1)
 
     await user.click(screen.getByText('다시 생성'))

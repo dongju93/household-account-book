@@ -105,6 +105,88 @@ describe('monthInsightPrompt', () => {
   })
 })
 
+describe('periodExplainPrompt', () => {
+  const periodInput = {
+    periodKey: '3m:2026-03_2026-05',
+    progress: { asOf: '2026-05-20', dayOfMonth: 20, daysInMonth: 31 },
+    months: [
+      {
+        month: '2026-04',
+        income: 3_200_000,
+        expense: 1_600_000,
+        saving: 600_000,
+        investment: 300_000,
+        balance: 700_000,
+      },
+      {
+        month: '2026-05',
+        income: 3_100_000,
+        expense: 1_400_000,
+        saving: 500_000,
+        investment: 300_000,
+        balance: 900_000,
+      },
+    ],
+    topCategories: [{ name: '식비', amount: 800_000, pct: 50 }],
+    categoryChanges: [
+      {
+        name: '식비',
+        previousAmount: 300_000,
+        latestAmount: 180_000,
+        delta: -120_000,
+        deltaPct: -40,
+      },
+    ],
+  }
+
+  it('presents domain-computed trends in Korean display values', () => {
+    const prompt = buildFeaturePrompt('period_explain', periodInput)
+    const match = prompt.user.match(/<period_data>\n(.+)\n<\/period_data>/)
+
+    expect(match).not.toBeNull()
+    const data = JSON.parse(match![1]) as {
+      진행: Record<string, unknown>
+      월별흐름: Record<string, unknown>[]
+      기간상위지출: Record<string, unknown>[]
+      최근월카테고리변화: Record<string, unknown>[]
+    }
+
+    expect(data.진행).toEqual({ 기준일: '2026-05-20', 경과일: 20, 총일수: 31 })
+    expect(data.월별흐름[1]).toMatchObject({ 지출: '₩1,400,000', 수지: '₩900,000' })
+    expect(data.기간상위지출[0]).toEqual({
+      카테고리: '식비',
+      기간지출: '₩800,000',
+      기간지출비중: '50%',
+    })
+    expect(data.최근월카테고리변화[0]).toEqual({
+      카테고리: '식비',
+      이전달: '₩300,000',
+      최근달: '₩180,000',
+      변화액: '-₩120,000',
+      변화율: '-40%',
+    })
+  })
+
+  it('requires interpretation and concrete advice instead of generic bullets', () => {
+    const prompt = buildFeaturePrompt('period_explain', periodInput)
+    const schema = prompt.schema as {
+      required: string[]
+      properties: {
+        bullets: { minItems: number; maxItems: number }
+      }
+    }
+
+    expect(prompt.system).toContain('표에 보이는 값을 다시 읽어주는 것이 아니라')
+    expect(prompt.system).toContain('서로 다른 근거 두 개 이상을 연결')
+    expect(prompt.system).toContain('마지막 달의 감소를 개선으로, 증가를 악화로 단정하지 마세요')
+    expect(prompt.system).toContain('근거와 판단 이유 → 확인하거나 바꿀 행동 → 완료 기준')
+    expect(prompt.system).toContain('새 숫자를 계산하거나 만들지 마세요')
+    expect(prompt.system).toContain('상위 지출이라는 이유만으로 무조건 줄이라고 하지 않습니다')
+    expect(schema.required).toEqual(['bullets', 'periodKey'])
+    expect(schema.properties.bullets).toMatchObject({ minItems: 2, maxItems: 4 })
+  })
+})
+
 describe('monthClosePrompt', () => {
   it('turns findings into prioritized decisions instead of restating the list', () => {
     const prompt = buildFeaturePrompt('month_close_narrative', {

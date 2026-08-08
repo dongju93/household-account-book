@@ -14,7 +14,7 @@ import { Skeleton, SkeletonScreen, TextAction } from '../../ui'
 type ExplainState =
   | { kind: 'idle' }
   | { kind: 'hidden' }
-  | { kind: 'ok'; bullets: string[]; cached: boolean }
+  | { kind: 'ok'; interpretation: string; advice: string[]; cached: boolean }
   | { kind: 'error'; message: string }
 
 export function AiPeriodExplainCard({
@@ -57,17 +57,19 @@ export function AiPeriodExplainCard({
       if (res.result.periodKey !== input.periodKey) {
         return { kind: 'error', message: '응답이 요청한 기간과 일치하지 않습니다.' }
       }
-      const bullets = res.result.bullets
+      const { bullets } = res.result
       if (
         !Array.isArray(bullets) ||
-        bullets.length === 0 ||
-        !bullets.every((b) => typeof b === 'string')
+        bullets.length < 2 ||
+        !bullets.every((item) => typeof item === 'string')
       ) {
         return { kind: 'error', message: '응답 형식이 올바르지 않습니다.' }
       }
+      const [interpretation, ...advice] = polishInsightBullets(bullets)
       return {
         kind: 'ok',
-        bullets: polishInsightBullets(bullets),
+        interpretation,
+        advice,
         cached: res.cached === true,
       }
     } catch (err) {
@@ -91,7 +93,7 @@ export function AiPeriodExplainCard({
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <div className="flex items-baseline gap-2">
           <h2 className="text-section text-ink">AI 기간 해설</h2>
-          <span className="text-caption text-ink2">AI가 작성한 조언</span>
+          <span className="text-caption text-ink2">흐름 해석과 다음 행동</span>
         </div>
         <TextAction onClick={reload} disabled={loading}>
           다시 생성
@@ -105,14 +107,23 @@ export function AiPeriodExplainCard({
           <Skeleton className="h-3 w-[70%]" />
         </SkeletonScreen>
       ) : state.kind === 'ok' ? (
-        <ul className="flex flex-col gap-1.5">
-          {state.bullets.map((b) => (
-            <li key={b} className="text-body flex gap-2 text-ink2 text-pretty">
-              <span aria-hidden className="mt-2 h-1 w-1 flex-none rounded-full bg-ink3" />
-              {b}
-            </li>
-          ))}
-        </ul>
+        <div className="flex flex-col gap-3">
+          <div>
+            <h3 className="text-caption mb-1 font-semibold text-ink2">핵심 해석</h3>
+            <p className="text-body text-ink text-pretty">{state.interpretation}</p>
+          </div>
+          <div>
+            <h3 className="text-caption mb-1 font-semibold text-ink2">다음 행동</h3>
+            <ul className="flex flex-col gap-1.5">
+              {state.advice.map((item) => (
+                <li key={item} className="text-body flex gap-2 text-ink2 text-pretty">
+                  <span aria-hidden className="mt-2 h-1 w-1 flex-none rounded-full bg-ink3" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       ) : state.kind === 'error' ? (
         <p className="text-caption text-status-danger">{state.message}</p>
       ) : null}

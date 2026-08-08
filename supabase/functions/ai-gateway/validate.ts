@@ -170,12 +170,61 @@ function validateMonthInsight(input: unknown): ValidationResult {
 
 function validatePeriodExplain(input: unknown): ValidationResult {
   if (!isRecord(input)) return fail('period_explain.input은 객체여야 합니다.')
-  const { periodKey, months, topCategories } = input
+  const { periodKey, progress, months, topCategories, categoryChanges } = input
   if (typeof periodKey !== 'string' || periodKey.length === 0 || periodKey.length > 32) {
     return fail('periodKey가 필요합니다.')
   }
   if (!Array.isArray(months) || months.length === 0 || months.length > 12) {
     return fail('months는 1~12개여야 합니다.')
+  }
+  if (progress !== undefined) {
+    if (
+      !isRecord(progress) ||
+      typeof progress.asOf !== 'string' ||
+      !DATE_RE.test(progress.asOf) ||
+      typeof progress.dayOfMonth !== 'number' ||
+      !Number.isInteger(progress.dayOfMonth) ||
+      typeof progress.daysInMonth !== 'number' ||
+      !Number.isInteger(progress.daysInMonth) ||
+      progress.daysInMonth < 28 ||
+      progress.daysInMonth > 31 ||
+      progress.dayOfMonth < 1 ||
+      progress.dayOfMonth > progress.daysInMonth
+    ) {
+      return fail('progress 형식이 올바르지 않습니다.')
+    }
+  }
+  for (const month of months) {
+    if (!isRecord(month) || typeof month.month !== 'string' || !MONTH_RE.test(month.month)) {
+      return fail('months.month는 YYYY-MM 형식이어야 합니다.')
+    }
+    const { income, expense, saving, investment, balance } = month
+    for (const [key, value] of Object.entries({ income, expense, saving, investment, balance })) {
+      if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
+        return fail(`months.${key}는 안전한 정수여야 합니다.`)
+      }
+    }
+    if (
+      typeof income !== 'number' ||
+      typeof expense !== 'number' ||
+      typeof saving !== 'number' ||
+      typeof investment !== 'number' ||
+      typeof balance !== 'number'
+    ) {
+      return fail('months 자금 합계 형식이 올바르지 않습니다.')
+    }
+    if (income < 0 || expense < 0 || saving < 0 || investment < 0) {
+      return fail('months의 자금 유형 합계는 0 이상이어야 합니다.')
+    }
+    if (balance !== income - expense - saving - investment) {
+      return fail('months.balance가 자금 유형 합계와 일치하지 않습니다.')
+    }
+  }
+  if (isRecord(progress) && typeof progress.asOf === 'string') {
+    const latestMonth = months[months.length - 1]
+    if (!isRecord(latestMonth) || progress.asOf.slice(0, 7) !== latestMonth.month) {
+      return fail('progress.asOf는 마지막 집계 월에 속해야 합니다.')
+    }
   }
   if (topCategories !== undefined && (!Array.isArray(topCategories) || topCategories.length > 5)) {
     return fail('topCategories는 최대 5개입니다.')
@@ -189,6 +238,45 @@ function validatePeriodExplain(input: unknown): ValidationResult {
       }
       if (typeof c.amount !== 'number' || typeof c.pct !== 'number') {
         return fail('topCategories.amount/pct는 숫자여야 합니다.')
+      }
+      if (
+        !Number.isSafeInteger(c.amount) ||
+        c.amount < 0 ||
+        !Number.isFinite(c.pct) ||
+        c.pct < 0 ||
+        c.pct > 100
+      ) {
+        return fail('topCategories.amount/pct가 유효하지 않습니다.')
+      }
+    }
+  }
+  if (categoryChanges !== undefined) {
+    if (!Array.isArray(categoryChanges) || categoryChanges.length > 5) {
+      return fail('categoryChanges는 최대 5개입니다.')
+    }
+    for (const c of categoryChanges) {
+      if (!isRecord(c)) return fail('categoryChanges 항목 형식이 올바르지 않습니다.')
+      if (typeof c.name !== 'string' || c.name.length === 0 || pgCharLength(c.name) > 40) {
+        return fail('categoryChanges.name은 1~40자여야 합니다.')
+      }
+      const { previousAmount, latestAmount, delta, deltaPct } = c
+      if (typeof previousAmount !== 'number' || !Number.isSafeInteger(previousAmount)) {
+        return fail('categoryChanges.previousAmount는 안전한 정수여야 합니다.')
+      }
+      if (typeof latestAmount !== 'number' || !Number.isSafeInteger(latestAmount)) {
+        return fail('categoryChanges.latestAmount는 안전한 정수여야 합니다.')
+      }
+      if (typeof delta !== 'number' || !Number.isSafeInteger(delta)) {
+        return fail('categoryChanges.delta는 안전한 정수여야 합니다.')
+      }
+      if (typeof deltaPct !== 'number' || !Number.isFinite(deltaPct)) {
+        return fail('categoryChanges.deltaPct는 유한한 숫자여야 합니다.')
+      }
+      if (previousAmount < 0 || latestAmount < 0) {
+        return fail('categoryChanges의 월별 금액은 0 이상이어야 합니다.')
+      }
+      if (delta !== latestAmount - previousAmount) {
+        return fail('categoryChanges.delta가 월별 금액 차이와 일치하지 않습니다.')
       }
     }
   }
@@ -415,11 +503,26 @@ function validateMonthCloseNarrativeResult(result: unknown): ResultValidation {
 
 function validatePeriodExplainResult(result: unknown): ResultValidation {
   if (!isRecord(result)) return resultFail('period_explain 결과는 객체여야 합니다.')
-  if (!isStringArray(result.bullets, 2, 4)) {
-    return resultFail('bullets는 2~4개의 문자열 배열이어야 합니다.')
+  if (!Array.isArray(result.bullets) || result.bullets.length < 2 || result.bullets.length > 4) {
+    return resultFail('bullets는 핵심 해석 1개와 조언 1~3개여야 합니다.')
   }
-  if (typeof result.periodKey !== 'string') {
-    return resultFail('periodKey는 문자열이어야 합니다.')
+  const [interpretation, ...advice] = result.bullets
+  if (
+    typeof interpretation !== 'string' ||
+    interpretation.length < 45 ||
+    interpretation.length > 320
+  ) {
+    return resultFail('첫 bullets 항목은 45~320자인 핵심 해석이어야 합니다.')
+  }
+  if (!isStringArray(advice, 1, 3, 40, 260)) {
+    return resultFail('나머지 bullets 항목은 40~260자인 조언 1~3개여야 합니다.')
+  }
+  if (
+    typeof result.periodKey !== 'string' ||
+    result.periodKey.length === 0 ||
+    result.periodKey.length > 32
+  ) {
+    return resultFail('periodKey는 1~32자인 문자열이어야 합니다.')
   }
   return { ok: true }
 }

@@ -9,13 +9,14 @@ import { listCategories } from '../../data/categories'
 import { fetchTransactionsInRange, materializeMonths } from '../../data/summary'
 import {
   categoryExpenseBreakdown,
+  categoryMonthOverMonthDeltas,
   groupTransactionsByMonth,
   monthlyCategoryStacks,
   monthlyTrend,
   REPORT_PERIODS,
   type ReportPeriodMonths,
 } from '../../domain/reports'
-import { currentYearMonth, lastMonths, monthWindowRange } from '../../lib/month'
+import { currentYearMonth, lastMonths, monthWindowRange, todayISO } from '../../lib/month'
 import { AppBar, Chip, ErrorBanner, ReportsSkeleton, ScreenBody } from '../../ui'
 import { useStatsQnaTools } from '../../webmcp/useStatsQnaTools'
 import { AiPeriodExplainCard } from './AiPeriodExplainCard'
@@ -59,6 +60,7 @@ export function ReportsPage() {
   const byMonth = groupTransactionsByMonth(months, txns)
   const trend = monthlyTrend(byMonth)
   const breakdown = categoryExpenseBreakdown(categories, txns)
+  const categoryChanges = categoryMonthOverMonthDeltas(categories, byMonth)
   const { points: stackPoints, series: stackSeries } = monthlyCategoryStacks(categories, byMonth, 4)
   const hasStackedExpense = stackPoints.some((p) => stackSeries.some((s) => Number(p[s.key]) > 0))
 
@@ -79,7 +81,13 @@ export function ReportsPage() {
         {ledgerId && (
           <AiPeriodExplainCard
             ledgerId={ledgerId}
-            input={buildPeriodExplainInput({ period, trend, breakdown })}
+            input={buildPeriodExplainInput({
+              period,
+              trend,
+              breakdown,
+              categoryChanges,
+              inProgress: { asOf: todayISO(), ym: anchor },
+            })}
             ready={ready}
           />
         )}

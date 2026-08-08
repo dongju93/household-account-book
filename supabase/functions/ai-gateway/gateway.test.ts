@@ -428,6 +428,26 @@ describe('validateFeatureInput period_explain', () => {
     expect(r.ok).toBe(true)
   })
 
+  it('rejects a month whose balance contradicts its fund totals', () => {
+    const r = validateFeatureInput('period_explain', {
+      ...baseInput,
+      months: [{ ...baseInput.months[0], balance: 999 }],
+    })
+    expect(r.ok).toBe(false)
+  })
+
+  it('accepts progress for the latest partial month and rejects a mismatched month', () => {
+    const progress = { asOf: '2026-03-20', dayOfMonth: 20, daysInMonth: 31 }
+    const ok = validateFeatureInput('period_explain', { ...baseInput, progress })
+    const mismatch = validateFeatureInput('period_explain', {
+      ...baseInput,
+      progress: { ...progress, asOf: '2026-04-20' },
+    })
+
+    expect(ok.ok).toBe(true)
+    expect(mismatch.ok).toBe(false)
+  })
+
   it('rejects more than 5 topCategories', () => {
     const topCategories = Array.from({ length: 6 }, (_, i) => ({
       name: `cat-${i}`,
@@ -477,6 +497,54 @@ describe('validateFeatureInput period_explain', () => {
       topCategories: [{ name: '🎉'.repeat(41), amount: 1000, pct: 10 }],
     })
     expect(tooLong.ok).toBe(false)
+  })
+
+  it('accepts domain-computed recent category changes', () => {
+    const r = validateFeatureInput('period_explain', {
+      ...baseInput,
+      categoryChanges: [
+        {
+          name: '식비',
+          previousAmount: 300000,
+          latestAmount: 180000,
+          delta: -120000,
+          deltaPct: -40,
+        },
+      ],
+    })
+    expect(r.ok).toBe(true)
+  })
+
+  it('rejects malformed recent category changes', () => {
+    const r = validateFeatureInput('period_explain', {
+      ...baseInput,
+      categoryChanges: [
+        {
+          name: '식비',
+          previousAmount: 300000,
+          latestAmount: 180000,
+          delta: '감소',
+          deltaPct: -40,
+        },
+      ],
+    })
+    expect(r.ok).toBe(false)
+  })
+
+  it('rejects a category delta that contradicts its monthly amounts', () => {
+    const r = validateFeatureInput('period_explain', {
+      ...baseInput,
+      categoryChanges: [
+        {
+          name: '식비',
+          previousAmount: 300000,
+          latestAmount: 180000,
+          delta: -100000,
+          deltaPct: -40,
+        },
+      ],
+    })
+    expect(r.ok).toBe(false)
   })
 })
 
@@ -536,6 +604,37 @@ describe('feature matrix sanity', () => {
 })
 
 describe('validateFeatureResult (structured output schema)', () => {
+  it('accepts a period interpretation with actionable advice', () => {
+    const r = validateFeatureResult('period_explain', {
+      bullets: [
+        '최근 달에는 지출 감소와 수지 개선이 함께 나타났지만, 식비 감소가 일회성인지 반복 가능한 변화인지는 거래 내역 확인이 필요합니다.',
+        '식비의 최근 거래를 반복 지출과 일회성 지출로 구분해 감소 원인을 확인하고, 다음 달에도 적용할 지출 규칙 하나를 정하면 완료입니다.',
+      ],
+      periodKey: '3m:2026-03_2026-05',
+    })
+    expect(r.ok).toBe(true)
+  })
+
+  it('rejects a period result that omits interpretation or falls back to short filler', () => {
+    const noInterpretation = validateFeatureResult('period_explain', {
+      bullets: [
+        '식비 거래를 확인하고 다음 달 규칙을 정하세요.',
+        '식비 거래를 확인하고 다음 달 규칙을 정하세요.',
+      ],
+      periodKey: '3m:2026-03_2026-05',
+    })
+    const shortAdvice = validateFeatureResult('period_explain', {
+      bullets: [
+        '최근 달에는 지출 감소와 수지 개선이 함께 나타났지만, 같은 변화가 반복될지는 거래 내역 확인이 필요합니다.',
+        '절약하세요.',
+      ],
+      periodKey: '3m:2026-03_2026-05',
+    })
+
+    expect(noInterpretation.ok).toBe(false)
+    expect(shortAdvice.ok).toBe(false)
+  })
+
   it('accepts a well-formed month_insight result', () => {
     const r = validateFeatureResult('month_insight', {
       bullets: VALID_INSIGHT_BULLETS,

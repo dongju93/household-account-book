@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { CategoryBreakdownRow, MonthlyTrendPoint } from '../domain/reports'
+import type { CategoryBreakdownRow, CategoryDeltaRow, MonthlyTrendPoint } from '../domain/reports'
 import { lastMonths, monthKey } from '../lib/month'
 import { buildPeriodExplainInput } from './buildPeriodExplainInput'
 
@@ -41,11 +41,32 @@ describe('buildPeriodExplainInput', () => {
     { categoryId: 'cat-6', name: '기타', amount: 50000, pct: 3.125 },
   ]
 
+  const mockCategoryChanges: CategoryDeltaRow[] = [
+    {
+      categoryId: 'cat-1',
+      name: '식비',
+      previousAmount: 300000,
+      latestAmount: 180000,
+      delta: -120000,
+      deltaPct: -40,
+    },
+    {
+      categoryId: 'cat-2',
+      name: '주거',
+      previousAmount: 400000,
+      latestAmount: 450000,
+      delta: 50000,
+      deltaPct: 13,
+    },
+  ]
+
   it('builds periodKey and maps aggregate trend points correctly', () => {
     const input = buildPeriodExplainInput({
       period: 3,
       trend: mockTrend,
       breakdown: mockBreakdown,
+      categoryChanges: mockCategoryChanges,
+      inProgress: { asOf: '2026-05-20', ym: { year: 2026, month: 5 } },
     })
 
     expect(input.periodKey).toBe('3m:2026-03_2026-05')
@@ -59,6 +80,7 @@ describe('buildPeriodExplainInput', () => {
       investment: 300000,
       balance: 700000,
     })
+    expect(input.progress).toEqual({ asOf: '2026-05-20', dayOfMonth: 20, daysInMonth: 31 })
   })
 
   it('caps topCategories to at most 5 items and strips categoryId', () => {
@@ -66,6 +88,7 @@ describe('buildPeriodExplainInput', () => {
       period: 6,
       trend: mockTrend,
       breakdown: mockBreakdown,
+      categoryChanges: mockCategoryChanges,
     })
 
     expect(input.topCategories).toHaveLength(5)
@@ -78,6 +101,33 @@ describe('buildPeriodExplainInput', () => {
     ])
     // Ensure categoryId is not exposed
     expect(input.topCategories?.[0]).not.toHaveProperty('categoryId')
+  })
+
+  it('maps the largest recent category changes and strips categoryId', () => {
+    const input = buildPeriodExplainInput({
+      period: 3,
+      trend: mockTrend,
+      breakdown: mockBreakdown,
+      categoryChanges: mockCategoryChanges,
+    })
+
+    expect(input.categoryChanges).toEqual([
+      {
+        name: '식비',
+        previousAmount: 300000,
+        latestAmount: 180000,
+        delta: -120000,
+        deltaPct: -40,
+      },
+      {
+        name: '주거',
+        previousAmount: 400000,
+        latestAmount: 450000,
+        delta: 50000,
+        deltaPct: 13,
+      },
+    ])
+    expect(input.categoryChanges?.[0]).not.toHaveProperty('categoryId')
   })
 
   it('caps trend to at most 12 months', () => {
@@ -94,6 +144,7 @@ describe('buildPeriodExplainInput', () => {
       period: 12,
       trend: longTrend,
       breakdown: [],
+      categoryChanges: [],
     })
 
     expect(input.months).toHaveLength(12)
