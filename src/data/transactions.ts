@@ -134,7 +134,6 @@ export async function fetchMemoHistory(
 export async function fetchNearDuplicateCandidates(
   ledgerId: string,
   draft: { txnDate: string; type: FundType; amount: number; categoryId: string },
-  limit = 20,
 ): Promise<Transaction[]> {
   const { data, error } = await supabase
     .from('transactions')
@@ -147,7 +146,6 @@ export async function fetchNearDuplicateCandidates(
     .lte('txn_date', addDaysISO(draft.txnDate, 1))
     .order('txn_date', { ascending: true })
     .order('id', { ascending: true })
-    .limit(limit)
 
   if (error) throw error
   return (data ?? []).map(mapTransaction)
