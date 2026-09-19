@@ -17,28 +17,36 @@ export function ChatLauncher({ hidden, onOpen }: { hidden: boolean; onOpen: () =
   if (hidden || !enabled || !ledgerId) return null
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label={`${CHAT_SURFACE_LABEL}에게 묻기`}
-      // Above the 56px tab bar (+ home indicator), tucked to the right edge of
-      // the 480px column so it never sits over the centre add button.
-      className="pressable text-caption fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] z-(--z-nav) flex min-h-10 items-center gap-1.5 rounded-full border border-line bg-paper px-3.5 font-semibold text-ink shadow-raised hover:bg-fill1"
-    >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
+    // Same anchoring trick as `TabBar`: a fixed element with no `left`/`right`
+    // keeps its *static* position, i.e. the column AppShell centres with
+    // `mx-auto`. Setting `right-4` directly on the button would make the
+    // viewport its containing block, so on viewports wider than 480px the pill
+    // would sit at the browser edge while the tab bar stays in the column. The
+    // wrapper spans the column and is click-through; only the pill is hit-testable.
+    <div className="pointer-events-none fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] z-(--z-nav) flex w-full max-w-[480px] justify-end pr-4">
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`${CHAT_SURFACE_LABEL}에게 묻기`}
+        // Above the 56px tab bar (+ home indicator), tucked to the right edge of
+        // the 480px column so it never sits over the centre add button.
+        className="pressable text-caption pointer-events-auto flex min-h-10 items-center gap-1.5 rounded-full border border-line bg-paper px-3.5 font-semibold text-ink shadow-raised hover:bg-fill1"
       >
-        <path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" />
-      </svg>
-      {CHAT_SURFACE_LABEL}
-    </button>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" />
+        </svg>
+        {CHAT_SURFACE_LABEL}
+      </button>
+    </div>
   )
 }
