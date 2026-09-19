@@ -60,7 +60,7 @@ export function ChatSheet({
   /** Fired once when the gateway answers `flag_off`; the layout hides the entry. */
   onUnavailable: () => void
 }) {
-  const { ledgerId } = useLedger()
+  const { ledgerId, canEdit } = useLedger()
   const { enabled } = useAiSettings()
   const { version } = useRefresh()
   const [history, setHistory] = useState<ChatMessage[]>([])
@@ -79,8 +79,8 @@ export function ChatSheet({
     error: snapshotError,
     reload: reloadSnapshot,
   } = useAsyncData(
-    () => (active && ledgerId ? loadChatSnapshot(ledgerId) : Promise.resolve(null)),
-    [active, ledgerId, version],
+    () => (active && ledgerId ? loadChatSnapshot(ledgerId, { canEdit }) : Promise.resolve(null)),
+    [active, ledgerId, version, canEdit],
   )
 
   if (!enabled || !ledgerId) return null
