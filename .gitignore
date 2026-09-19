@@ -56,9 +56,7 @@ spec/
 supabase/.temp/
 dist/
 .env
-CLAUDE.md
 AGENTS.md
-CLAUDE.md
 .agents/
 .claude/
 coverage/
