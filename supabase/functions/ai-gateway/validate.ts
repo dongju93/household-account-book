@@ -3,7 +3,7 @@
  * Pure functions; no I/O.
  */
 
-import { isAiFeature, type AiFeature } from './config.ts'
+import { CHAT_TURN_LIMITS, isAiFeature, type AiFeature } from './config.ts'
 import { FUND_TYPES, type AiGatewayRequest } from './types.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -313,17 +313,25 @@ function validateBudgetRecommend(input: unknown): ValidationResult {
 function validateChatTurn(input: unknown): ValidationResult {
   if (!isRecord(input)) return fail('chat_turn.input은 객체여야 합니다.')
   const { messages, context } = input
-  if (!Array.isArray(messages) || messages.length === 0 || messages.length > 12) {
-    return fail('messages는 1~12개여야 합니다.')
+  const { messagesMax, contentMax, contextMaxBytes } = CHAT_TURN_LIMITS
+  if (!Array.isArray(messages) || messages.length === 0 || messages.length > messagesMax) {
+    return fail(`messages는 1~${messagesMax}개여야 합니다.`)
   }
   for (const m of messages) {
     if (!isRecord(m)) return fail('message 형식이 올바르지 않습니다.')
     if (m.role !== 'user' && m.role !== 'assistant') {
       return fail('message.role은 user 또는 assistant여야 합니다.')
     }
-    if (typeof m.content !== 'string' || m.content.length === 0 || m.content.length > 500) {
-      return fail('message.content는 1~500자여야 합니다.')
+    if (typeof m.content !== 'string' || m.content.length === 0 || m.content.length > contentMax) {
+      return fail(`message.content는 1~${contentMax}자여야 합니다.`)
     }
+  }
+  // A turn is always answered from the user's side: a trailing assistant
+  // message would make the model continue its own reply, billing a turn that
+  // no one asked for.
+  const last = messages[messages.length - 1] as Record<string, unknown>
+  if (last.role !== 'user') {
+    return fail('마지막 message는 user여야 합니다.')
   }
   if (context !== undefined) {
     let size: number
@@ -332,7 +340,7 @@ function validateChatTurn(input: unknown): ValidationResult {
     } catch {
       return fail('context를 직렬화할 수 없습니다.')
     }
-    if (size > 8 * 1024) {
+    if (size > contextMaxBytes) {
       return fail('chat context 스냅샷은 8KiB 이하여야 합니다.')
     }
   }
@@ -559,6 +567,12 @@ function validateBudgetRecommendResult(result: unknown): ResultValidation {
 
 function validateChatTurnResult(result: unknown): ResultValidation {
   if (!isRecord(result)) return resultFail('chat_turn 결과는 객체여야 합니다.')
-  if (typeof result.reply !== 'string') return resultFail('reply는 문자열이어야 합니다.')
+  const { reply } = result
+  if (typeof reply !== 'string' || reply.trim().length === 0) {
+    return resultFail('reply는 비어 있지 않은 문자열이어야 합니다.')
+  }
+  if (reply.length > CHAT_TURN_LIMITS.replyMax) {
+    return resultFail(`reply는 ${CHAT_TURN_LIMITS.replyMax}자 이하여야 합니다.`)
+  }
   return { ok: true }
 }

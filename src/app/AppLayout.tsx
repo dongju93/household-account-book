@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 
+import { ChatLauncher } from '../features/chat/ChatLauncher'
+import { ChatSheet } from '../features/chat/ChatSheet'
 import { AddTransactionSheet } from '../features/transactions/AddTransactionSheet'
 import { AppShell, TabBar } from '../ui'
 import '../webmcp/registerWebMcpRuntime'
@@ -13,8 +15,15 @@ import { useRefresh } from './useRefresh'
 // is mounted here (not a screen) because it does its own on-demand fetch for
 // whatever month is asked, rather than reading a screen's already-loaded data
 // (see docs/3. ai-plan-month-close-review.md §1).
+//
+// The 앱 AI chat sheet is global for the same reason as the add sheet: spec §5.4
+// puts its entry in the layout so it works from every screen. `chatHidden` is
+// session state — once the gateway answers `flag_off` (chat's own rollout flag
+// or the kill switch) the launcher is dropped instead of inviting repeat taps.
 export function AppLayout() {
   const [addOpen, setAddOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatHidden, setChatHidden] = useState(false)
   const { refresh } = useRefresh()
   const { pathname } = useLocation()
   useMonthCloseTools()
@@ -34,6 +43,12 @@ export function AppLayout() {
       <TabBar onAdd={() => setAddOpen(true)} />
       {/* onSaved only refreshes data — the sheet closes itself unless 저장 후 계속. */}
       <AddTransactionSheet open={addOpen} onClose={() => setAddOpen(false)} onSaved={refresh} />
+      <ChatLauncher hidden={chatHidden} onOpen={() => setChatOpen(true)} />
+      <ChatSheet
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        onUnavailable={() => setChatHidden(true)}
+      />
     </AppShell>
   )
 }

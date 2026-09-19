@@ -38,6 +38,7 @@ export const MESSAGES = {
   forbidden: '이 AI 기능을 사용할 권한이 없습니다.',
   optedOut: '인앱 AI 사용이 꺼져 있습니다. 설정에서 켤 수 있습니다.',
   flagOff: '인앱 AI 기능을 일시적으로 사용할 수 없습니다.',
+  chatFlagOff: '앱 AI 채팅은 아직 열리지 않았습니다.',
   validation: '요청 형식이 올바르지 않습니다.',
   bodyTooLarge: '요청 본문이 너무 큽니다.',
   invalidJson: '요청 JSON을 해석할 수 없습니다.',

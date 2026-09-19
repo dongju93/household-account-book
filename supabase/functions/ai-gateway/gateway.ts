@@ -2,7 +2,7 @@
  * ai-gateway control flow (docs/4 §4.5.1, §4.6.1).
  *
  * Order (quota claim only after gates pass):
- *   getUser → flag → opt-out → membership(minRole) → validate →
+ *   getUser → flag (+ chat flag for chat_turn) → opt-out → membership(minRole) → validate →
  *   cache? → claim → OpenAI → settle/refund → audit
  *
  * Injectable deps enable pure acceptance tests without Deno/Docker.
@@ -12,6 +12,7 @@ import {
   CACHEABLE_FEATURES,
   FEATURE_MIN_ROLE,
   RAW_BODY_MAX_BYTES,
+  isAiChatEnabled,
   isAiFeaturesEnabled,
   maxOutputTokensFor,
   tokenEstimateFor,
@@ -42,6 +43,8 @@ export interface GatewayDeps {
   getUserId: (authHeader: string | null) => Promise<string | null>
   /** Raw env string for AI_FEATURES_ENABLED */
   aiFeaturesEnabledEnv: string | undefined | null
+  /** Raw env string for AI_CHAT_ENABLED — `chat_turn` only; default off (S12). */
+  aiChatEnabledEnv: string | undefined | null
   /** true only when user may use in-app AI (row true). Missing row → false (dark launch). */
   isInAppAiEnabled: (userId: string) => Promise<boolean>
   isLedgerMember: (userId: string, ledgerId: string, minRole: MinRole) => Promise<boolean>
@@ -179,6 +182,12 @@ export async function handleAiGateway(req: Request, deps: GatewayDeps): Promise<
   // ── global flag (before claim) ───────────────────────────────────────────
   if (!isAiFeaturesEnabled(deps.aiFeaturesEnabledEnv)) {
     return jsonResponse(errorBody('flag_off', MESSAGES.flagOff), 403)
+  }
+  // Chat has its own rollout flag on top of the global one (docs/4 §13 step 6);
+  // same `flag_off` code so the client hides the surface the way it does for
+  // the kill switch.
+  if (feature === 'chat_turn' && !isAiChatEnabled(deps.aiChatEnabledEnv)) {
+    return jsonResponse(errorBody('flag_off', MESSAGES.chatFlagOff), 403)
   }
 
   // ── opt-out (before claim) ───────────────────────────────────────────────

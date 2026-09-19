@@ -17,6 +17,7 @@ import {
   TOKEN_ESTIMATE,
   VISIBLE_OUTPUT_TOKENS,
 } from './config.ts'
+import { CHAT_TURN_LIMITS } from './config.ts'
 import { handleAiGateway, safetyIdentifierFor, type GatewayDeps } from './gateway.ts'
 import { OpenAIError } from './openai.ts'
 import {
@@ -86,6 +87,7 @@ function makeDeps(partial: Partial<GatewayDeps> = {}): TrackedDeps {
     model: 'gpt-5.6-luna',
     reasoningEffort: 'low',
     aiFeaturesEnabledEnv: 'true',
+    aiChatEnabledEnv: 'true',
     getUserId: async (h) => (h?.toLowerCase().startsWith('bearer ') ? USER : null),
     isInAppAiEnabled: async () => true,
     isLedgerMember: async () => true,
@@ -970,5 +972,196 @@ describe('validateFeatureResult (structured output schema)', () => {
       warnings: [],
     })
     expect(r.ok).toBe(false)
+  })
+})
+
+// ── S12 · chat_turn (docs/4-1 S12 acceptance) ────────────────────────────────
+
+function chatBody(over: Record<string, unknown> = {}, inputOver: Record<string, unknown> = {}) {
+  return {
+    feature: 'chat_turn',
+    ledgerId: LEDGER,
+    input: {
+      messages: [{ role: 'user', content: '이번 달 식비 얼마 썼어?' }],
+      context: {
+        today: '2026-09-19',
+        currentMonth: '2026-09',
+        months: [
+          {
+            month: '2026-09',
+            income: 3_000_000,
+            expense: 1_200_000,
+            saving: 500_000,
+            investment: 0,
+            balance: 1_300_000,
+            topExpenses: [{ name: '식비', amount: 400_000, pct: 33 }],
+          },
+        ],
+        achievements: [
+          { name: '식비', type: 'expense', target: 500_000, actual: 400_000, status: '정상' },
+        ],
+        categoryChanges: [],
+        truncated: false,
+      },
+      ...inputOver,
+    },
+    ...over,
+  }
+}
+
+function chatDeps(partial: Partial<GatewayDeps> = {}) {
+  return makeDeps({
+    callOpenAI: async () => ({
+      content: { reply: '이번 달 식비는 ₩400,000입니다.' },
+      model: 'gpt-5.6-luna',
+      promptTokens: 300,
+      completionTokens: 40,
+    }),
+    ...partial,
+  })
+}
+
+describe('S12 chat_turn acceptance', () => {
+  it('AI_CHAT_ENABLED 미설정 → flag_off (claim·OpenAI 전, 옵트아웃 조회 전)', async () => {
+    let settingsLookups = 0
+    const deps = chatDeps({
+      aiChatEnabledEnv: undefined,
+      isInAppAiEnabled: async () => {
+        settingsLookups++
+        return true
+      },
+    })
+    const res = await postJson(chatBody(), deps)
+    expect(res.status).toBe(403)
+    expect((await res.json()).code).toBe('flag_off')
+    expect(settingsLookups).toBe(0)
+    expect(deps.claims).toBe(0)
+    expect(deps.openAiCalls).toBe(0)
+  })
+
+  it('AI_CHAT_ENABLED="false"/"TRUE " 등 literal "true" 외 → flag_off; 다른 feature는 영향 없음', async () => {
+    for (const value of ['false', '1', 'yes', '']) {
+      const res = await postJson(chatBody(), chatDeps({ aiChatEnabledEnv: value }))
+      expect((await res.json()).code).toBe('flag_off')
+    }
+    // Trimmed/case-insensitive like the global flag.
+    const ok = await postJson(chatBody(), chatDeps({ aiChatEnabledEnv: ' TRUE ' }))
+    expect(ok.status).toBe(200)
+    // The chat flag never gates the other features.
+    const other = await postJson(baseNlBody(), makeDeps({ aiChatEnabledEnv: undefined }))
+    expect(other.status).toBe(200)
+  })
+
+  it('전역 AI_FEATURES_ENABLED=false면 chat 플래그가 true여도 flag_off', async () => {
+    const res = await postJson(chatBody(), chatDeps({ aiFeaturesEnabledEnv: 'false' }))
+    expect((await res.json()).code).toBe('flag_off')
+  })
+
+  it('옵트아웃 → forbidden (claim 전)', async () => {
+    const deps = chatDeps({ isInAppAiEnabled: async () => false })
+    const res = await postJson(chatBody(), deps)
+    expect(res.status).toBe(403)
+    expect((await res.json()).code).toBe('forbidden')
+    expect(deps.claims).toBe(0)
+  })
+
+  it('viewer 최소 역할: is_ledger_member(viewer)로 조회', async () => {
+    const roles: string[] = []
+    const deps = chatDeps({
+      isLedgerMember: async (_u, _l, role) => {
+        roles.push(role)
+        return true
+      },
+    })
+    const res = await postJson(chatBody(), deps)
+    expect(res.status).toBe(200)
+    expect(roles).toEqual(['viewer'])
+    expect(FEATURE_MIN_ROLE.chat_turn).toBe('viewer')
+  })
+
+  it('messages > 12 → validation (claim·OpenAI 없음)', async () => {
+    const messages = Array.from({ length: CHAT_TURN_LIMITS.messagesMax + 1 }, (_, i) => ({
+      role: i % 2 === 0 ? 'user' : 'assistant',
+      content: `m${i}`,
+    }))
+    const deps = chatDeps()
+    const res = await postJson(chatBody({}, { messages }), deps)
+    expect(res.status).toBe(400)
+    expect((await res.json()).code).toBe('validation')
+    expect(deps.claims).toBe(0)
+    expect(deps.openAiCalls).toBe(0)
+  })
+
+  it('content > 500자 → validation', async () => {
+    const deps = chatDeps()
+    const res = await postJson(
+      chatBody(
+        {},
+        { messages: [{ role: 'user', content: 'ㄱ'.repeat(CHAT_TURN_LIMITS.contentMax + 1) }] },
+      ),
+      deps,
+    )
+    expect((await res.json()).code).toBe('validation')
+    expect(deps.claims).toBe(0)
+  })
+
+  it('context 스냅샷 > 8KiB → validation', async () => {
+    const deps = chatDeps()
+    const context = { pad: 'x'.repeat(CHAT_TURN_LIMITS.contextMaxBytes) }
+    const res = await postJson(chatBody({}, { context }), deps)
+    expect((await res.json()).code).toBe('validation')
+    expect(deps.claims).toBe(0)
+  })
+
+  it('마지막 message가 assistant → validation', async () => {
+    const deps = chatDeps()
+    const res = await postJson(
+      chatBody(
+        {},
+        {
+          messages: [
+            { role: 'user', content: '안녕' },
+            { role: 'assistant', content: '무엇을 도와드릴까요?' },
+          ],
+        },
+      ),
+      deps,
+    )
+    expect((await res.json()).code).toBe('validation')
+    expect(deps.claims).toBe(0)
+  })
+
+  it('정상 턴: 비캐시 → 매 턴 claim → OpenAI → settle; dataVersionHash 불필요', async () => {
+    const deps = chatDeps()
+    const res = await postJson(chatBody(), deps)
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.ok).toBe(true)
+    expect(json.result.reply).toBe('이번 달 식비는 ₩400,000입니다.')
+    expect(json.cached).toBe(false)
+    expect(deps.claims).toBe(1)
+    expect(deps.openAiCalls).toBe(1)
+    expect(deps.settles).toBe(1)
+    expect(CACHEABLE_FEATURES.has('chat_turn')).toBe(false)
+  })
+
+  it('quota 초과 → 429 quota_exceeded (OpenAI 미호출)', async () => {
+    const deps = chatDeps({
+      claimQuota: async () => ({ ok: false, reason: 'daily' }),
+    })
+    const res = await postJson(chatBody(), deps)
+    expect(res.status).toBe(429)
+    expect((await res.json()).code).toBe('quota_exceeded')
+    expect(deps.openAiCalls).toBe(0)
+  })
+
+  it('reply 결과 검증: 빈 문자열·초과 길이 거부, 정상 허용', () => {
+    expect(validateFeatureResult('chat_turn', { reply: '' }).ok).toBe(false)
+    expect(validateFeatureResult('chat_turn', { reply: '   ' }).ok).toBe(false)
+    expect(
+      validateFeatureResult('chat_turn', { reply: 'a'.repeat(CHAT_TURN_LIMITS.replyMax + 1) }).ok,
+    ).toBe(false)
+    expect(validateFeatureResult('chat_turn', { reply: '네, 가능합니다.' }).ok).toBe(true)
+    expect(validateFeatureResult('chat_turn', { answer: 'x' }).ok).toBe(false)
   })
 })

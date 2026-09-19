@@ -216,7 +216,35 @@ export function parseOpenAIReasoningEffort(value: string): OpenAIReasoningEffort
   return effort as OpenAIReasoningEffort
 }
 
-/** Global kill switch: only explicit "true" enables paid calls (dark launch safe). */
-export function isAiFeaturesEnabled(envValue: string | undefined | null): boolean {
+/** Only the literal string "true" opens a paid path; missing/malformed fails closed. */
+function isTrueFlag(envValue: string | undefined | null): boolean {
   return (envValue ?? '').trim().toLowerCase() === 'true'
 }
+
+/** Global kill switch: only explicit "true" enables paid calls (dark launch safe). */
+export function isAiFeaturesEnabled(envValue: string | undefined | null): boolean {
+  return isTrueFlag(envValue)
+}
+
+/**
+ * Separate rollout flag for `chat_turn` (`AI_CHAT_ENABLED`; docs/4 §13 step 6,
+ * Key Decision 15). Chat is the one multi-turn, per-message-billed feature and
+ * the spec keeps it dark longer than P0, so `AI_FEATURES_ENABLED=true` alone
+ * never enables it. Checked after the global flag and before opt-out/claim, so
+ * a refused chat call neither consumes quota nor reveals membership.
+ */
+export function isAiChatEnabled(envValue: string | undefined | null): boolean {
+  return isTrueFlag(envValue)
+}
+
+/**
+ * `chat_turn` hard limits (docs/4 §4.8.4, §5.4). Mirror `AI_LIMITS.chatTurn` in
+ * `src/ai/types.ts`. `replyMax` bounds the model's visible answer so a runaway
+ * reply is rejected as `parse` instead of rendered.
+ */
+export const CHAT_TURN_LIMITS = {
+  messagesMax: 12,
+  contentMax: 500,
+  contextMaxBytes: 8 * 1024,
+  replyMax: 1200,
+} as const

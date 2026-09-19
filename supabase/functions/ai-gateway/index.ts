@@ -74,6 +74,7 @@ function buildDeps(req: Request): GatewayDeps {
 
   return {
     aiFeaturesEnabledEnv: Deno.env.get('AI_FEATURES_ENABLED'),
+    aiChatEnabledEnv: Deno.env.get('AI_CHAT_ENABLED'),
     model,
     reasoningEffort,
 
