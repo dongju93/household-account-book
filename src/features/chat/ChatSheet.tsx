@@ -83,13 +83,20 @@ export function ChatSheet({
     [active, ledgerId, version, canEdit],
   )
 
+  // `useAsyncData` keeps the previous `data` while a re-fetch is in flight
+  // (after a mutation bumps `version`, or the ledger changes), which is right
+  // for lists but wrong here: a turn sent then would pay for an answer grounded
+  // on pre-mutation — or the previous ledger's — numbers. Narrow once so no
+  // consumer below can see a snapshot that isn't the current one.
+  const readySnapshot = snapshotLoading ? null : snapshot
+
   if (!enabled || !ledgerId) return null
 
   const limits = AI_LIMITS.chatTurn
-  const canSend = Boolean(snapshot) && !sending && !unavailable && draft.trim().length > 0
+  const canSend = Boolean(readySnapshot) && !sending && !unavailable && draft.trim().length > 0
 
   async function handleSend() {
-    if (!snapshot || !ledgerId || sending || unavailable) return
+    if (!readySnapshot || !ledgerId || sending || unavailable) return
     const turn = appendUserTurn(history, draft, limits)
     if (!turn.ok) {
       setTurnError(
@@ -105,7 +112,7 @@ export function ChatSheet({
     setHistory(turn.messages)
     setDraft('')
     try {
-      const input: ChatTurnInput = { messages: turn.messages, context: snapshot }
+      const input: ChatTurnInput = { messages: turn.messages, context: readySnapshot }
       const res = await invokeAiFeature<ChatTurnResult>({ feature: 'chat_turn', ledgerId, input })
       const reply = typeof res.result?.reply === 'string' ? res.result.reply.trim() : ''
       if (!reply) {
@@ -193,7 +200,7 @@ export function ChatSheet({
               onChange={(e) => setDraft(e.target.value)}
               maxLength={limits.contentMax}
               rows={2}
-              disabled={sending || !snapshot}
+              disabled={sending || !readySnapshot}
               placeholder="예: 식비를 가장 많이 쓴 달은?"
               className={cn(inputClassName, 'min-h-12 resize-none py-2')}
             />

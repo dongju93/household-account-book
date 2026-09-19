@@ -12,6 +12,7 @@ import {
   type ChatTurnResult,
 } from '../../ai/types'
 import { RefreshProvider } from '../../app/refresh'
+import { useRefresh } from '../../app/useRefresh'
 import { AuthContext, type AuthValue } from '../../auth/authContext'
 import { LedgerContext, type LedgerValue } from '../../auth/ledgerContext'
 import type { AiUserSettings } from '../../data/aiSettings'
@@ -104,8 +105,13 @@ function okResponse(reply: string): AiGatewayOkResponse<ChatTurnResult> {
 }
 
 function Harness({ hidden = false, onUnavailable = () => {} }) {
+  // Stands in for any mutation elsewhere in the app bumping `version`.
+  const { refresh } = useRefresh()
   return (
     <>
+      <button type="button" onClick={refresh}>
+        refresh
+      </button>
       <ChatLauncher hidden={hidden} onOpen={() => {}} />
       <ChatSheet open onClose={() => {}} onUnavailable={onUnavailable} />
     </>
@@ -241,6 +247,43 @@ describe('ChatSheet + ChatLauncher (S12 / PR-13)', () => {
     renderChat({ hidden: true })
     await waitFor(() => expect(mockedSettings).toHaveBeenCalled())
     expect(screen.queryByRole('button', LAUNCHER)).not.toBeInTheDocument()
+  })
+
+  it('스냅샷 재집계 중에는 전송이 막히고, 재개된 턴은 이전이 아닌 새 스냅샷을 보낸다', async () => {
+    mockedInvoke.mockResolvedValue(okResponse('네.'))
+    renderChat()
+    const box = await screen.findByLabelText('질문')
+    await waitFor(() => expect(box).toBeEnabled())
+    await userEvent.type(box, '이번 달 수지?')
+    expect(screen.getByRole('button', { name: '보내기' })).toBeEnabled()
+
+    // A mutation bumps `version`; the re-fetch stays pending until we resolve it.
+    const fresh: ChatSnapshot = { ...SNAPSHOT, today: '2026-09-20' }
+    let resolveFresh!: (s: ChatSnapshot) => void
+    mockedSnapshot.mockImplementationOnce(
+      () =>
+        new Promise<ChatSnapshot>((r) => {
+          resolveFresh = r
+        }),
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'refresh' }))
+
+    // useAsyncData still holds the old snapshot here — sending must be gated on
+    // the loading state, not on `data` being non-null.
+    expect(await screen.findByRole('status', { name: '집계 준비 중…' })).toBeInTheDocument()
+    expect(box).toBeDisabled()
+    expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: '보내기' }))
+    expect(mockedInvoke).not.toHaveBeenCalled()
+    // The draft survives the refresh so nothing has to be retyped.
+    expect(box).toHaveValue('이번 달 수지?')
+
+    resolveFresh(fresh)
+    await waitFor(() => expect(box).toBeEnabled())
+    await userEvent.click(screen.getByRole('button', { name: '보내기' }))
+    await waitFor(() => expect(mockedInvoke).toHaveBeenCalledTimes(1))
+    const input = mockedInvoke.mock.calls[0][0].input as ChatTurnInput
+    expect(input.context).toEqual(fresh)
   })
 
   it('quota_exceeded 등 다른 오류는 메시지를 롤백하고 입력을 되돌려 재시도할 수 있게 한다', async () => {
