@@ -112,7 +112,7 @@ export function ChatSheet({
     setHistory(turn.messages)
     setDraft('')
     try {
-      const input: ChatTurnInput = { messages: turn.messages, context: readySnapshot }
+      const input: ChatTurnInput = { messages: turn.wire, context: readySnapshot }
       const res = await invokeAiFeature<ChatTurnResult>({ feature: 'chat_turn', ledgerId, input })
       const reply = typeof res.result?.reply === 'string' ? res.result.reply.trim() : ''
       if (!reply) {

@@ -309,7 +309,7 @@ export interface ChatSnapshot {
 }
 
 export interface ChatTurnInput {
-  /** ≤ 12, each ≤ 500 chars, last one `user` — see `appendUserTurn`. */
+  /** ≤ 12, each ≤ 500 chars, last one `user` — send `appendUserTurn(...).wire`. */
   messages: ChatMessage[]
   context: ChatSnapshot
 }

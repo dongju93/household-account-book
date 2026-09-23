@@ -227,6 +227,32 @@ describe('ChatSheet + ChatLauncher (S12 / PR-13)', () => {
     expect(last.messages.at(-2)).toEqual({ role: 'assistant', content: '네.' })
   })
 
+  it('replyMax까지 긴 답변도 전부 보여 주되, 다음 턴에는 contentMax 이내로 잘라 보내 대화가 깨지지 않는다', async () => {
+    const longReply = '가'.repeat(AI_LIMITS.chatTurn.replyMax)
+    mockedInvoke.mockResolvedValueOnce(okResponse(longReply)).mockResolvedValue(okResponse('네.'))
+    renderChat()
+    const box = await screen.findByLabelText('질문')
+    await waitFor(() => expect(box).toBeEnabled())
+
+    await userEvent.type(box, '질문1')
+    await userEvent.click(screen.getByRole('button', { name: '보내기' }))
+    expect(await screen.findByText(longReply)).toBeInTheDocument()
+    await waitFor(() => expect(box).toBeEnabled())
+
+    await userEvent.type(box, '질문2')
+    await userEvent.click(screen.getByRole('button', { name: '보내기' }))
+    await waitFor(() => expect(mockedInvoke).toHaveBeenCalledTimes(2))
+
+    const second = mockedInvoke.mock.calls[1][0].input as ChatTurnInput
+    for (const m of second.messages) {
+      expect(m.content.length).toBeLessThanOrEqual(AI_LIMITS.chatTurn.contentMax)
+    }
+    expect(second.messages.at(-1)).toEqual({ role: 'user', content: '질문2' })
+    // The on-screen history still holds the full reply after the next turn.
+    expect(await screen.findByText('네.')).toBeInTheDocument()
+    expect(screen.getByText(longReply)).toBeInTheDocument()
+  })
+
   it('flag_off: 시트를 잠그고 onUnavailable로 진입 버튼을 숨긴다 (재전송 불가)', async () => {
     mockedInvoke.mockRejectedValue(new AiClientError('flag_off', CHAT_UNAVAILABLE_MESSAGE))
     const onUnavailable = vi.fn()
