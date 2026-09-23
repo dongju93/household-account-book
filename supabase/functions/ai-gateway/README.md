@@ -5,7 +5,7 @@ Provider-paid in-app AI entrypoint. Spec: `docs/4` §4.6.1 / §7.1, tracker S02.
 ## Control flow
 
 ```text
-parse body (≤32 KiB) → getUser → AI_FEATURES_ENABLED
+parse body (≤32 KiB) → getUser → AI_FEATURES_ENABLED → AI_CHAT_ENABLED (chat_turn only)
   → in_app_ai_enabled + disclosure_version == AI_DISCLOSURE_VERSION
   → is_ledger_member(minRole) → feature input limits
   → cache hit? (same model + reasoning effort + schema-valid; no quota) → claim_ai_quota
@@ -28,6 +28,7 @@ re-enable under the new copy before data is sent.
 | `OPENAI_MODEL`              | yes      | `gpt-5.6`, `gpt-5.6-sol`, `gpt-5.6-terra`, or `gpt-5.6-luna`  |
 | `OPENAI_REASONING_EFFORT`   | yes      | `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max` |
 | `AI_FEATURES_ENABLED`       | yes\*    | only `true` enables paid calls                                |
+| `AI_CHAT_ENABLED`           | no       | `chat_turn` rollout flag; only `true` opens chat (see below)  |
 | `SUPABASE_URL`              | auto     | platform                                                      |
 | `SUPABASE_ANON_KEY`         | auto     | user JWT / getUser                                            |
 | `SUPABASE_SERVICE_ROLE_KEY` | auto     | quota + cache writes                                          |
@@ -75,10 +76,44 @@ Platform ceiling: Supabase returns 504 when a function has not responded within
 150s (CPU time is capped at 2s but excludes time awaiting `fetch`), so the table
 must leave room for the auth/quota/cache round trips around the call.
 
+## `chat_turn` — separate rollout flag, default off
+
+In-app Q&A chat (`chat_turn`, tracker S12 / docs/4 §5.4) is gated by its own
+secret **on top of** the global switch. It is the only multi-turn, per-message
+billed feature and the spec keeps it dark longer than P0 (docs/4 §13 step 6,
+Key Decision 15), so `AI_FEATURES_ENABLED=true` never enables it by itself:
+
+| `AI_FEATURES_ENABLED` | `AI_CHAT_ENABLED` | `chat_turn`               | other features |
+| --------------------- | ----------------- | ------------------------- | -------------- |
+| `false` / unset       | any               | `flag_off`                | `flag_off`     |
+| `true`                | unset / not true  | `flag_off` (chat message) | on             |
+| `true`                | `true`            | on                        | on             |
+
+The check runs before opt-out, membership and quota, so a refused chat call costs
+nothing and reveals nothing. The client treats the answer like the kill switch:
+the sheet locks and the 앱 AI launcher disappears for the rest of the session.
+
+**Default-off retention (the documented rollout policy):** leave `AI_CHAT_ENABLED`
+unset until _both_ hold —
+
+1. `AI_FEATURES_ENABLED=true` has been on for at least one week of real use with
+   the P0 features and the observed provider spend is on a ≤ ~$50/month
+   trajectory (tracker R3), and
+2. the provider-side spend limit is set (this is the binding cost ceiling: the
+   §4.8.1 chat quota of 10/day · 60/month is defined in migration 0011 but has
+   been non-binding since 0018 for the single-owner deployment).
+
+Then flip it with `supabase secrets set AI_CHAT_ENABLED=true` (tracker R6). Roll
+back with `supabase secrets set AI_CHAT_ENABLED=false` — the global kill switch
+is not needed for that. Hard limits per turn (Edge `validation`, no quota
+claimed): ≤12 messages, ≤500 chars each, last message `user`, snapshot ≤8 KiB;
+the reply is rejected as `parse` above 1,200 chars. Chat is never cached.
+
 ## Deploy (not Amplify)
 
 ```bash
 supabase secrets set OPENAI_API_KEY=... AI_FEATURES_ENABLED=false
+supabase secrets set AI_CHAT_ENABLED=false   # chat stays dark until the policy above is met
 supabase secrets set OPENAI_MODEL=gpt-5.6-luna
 supabase secrets set OPENAI_REASONING_EFFORT=<none|minimal|low|medium|high|xhigh|max>
 supabase functions deploy ai-gateway

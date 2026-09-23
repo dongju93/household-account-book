@@ -3,6 +3,7 @@
  * Keep in sync with `supabase/functions/ai-gateway/{types,config,validate}.ts`.
  */
 
+import type { ChatMessage } from '../domain/ai/chatTurn'
 import type { FundType } from '../domain/fundType'
 import type { MonthSummary } from '../domain/monthSummary'
 import type { ExpenseStatus, SavingStatus } from '../domain/types'
@@ -112,6 +113,12 @@ export const AI_LIMITS = {
     messagesMax: 12,
     contentMax: 500,
     contextMaxBytes: 8 * 1024,
+    replyMax: 1200,
+    /** Snapshot caps — client-side only; the Edge enforces the byte cap. */
+    monthsMax: 3,
+    topExpensesMax: 5,
+    achievementsMax: 40,
+    categoryChangesMax: 5,
   },
   dataVersionHashMax: 128,
 } as const
@@ -204,14 +211,14 @@ export interface MonthInsightResult {
  * otherwise, so a prompt-only deploy would keep serving stale bullets for TTL).
  * Included in the client hash payload only — never sent as gateway `input`.
  */
-export const MONTH_INSIGHT_PROMPT_REV = 12
+export const MONTH_INSIGHT_PROMPT_REV = 13
 
 /**
  * Bump when the Edge `month_close_narrative` prompt or output contract changes.
  * Included in the client hash payload only so prompt-only deploys cannot reuse
  * stale `ai_insight_cache` rows.
  */
-export const MONTH_CLOSE_NARRATIVE_PROMPT_REV = 1
+export const MONTH_CLOSE_NARRATIVE_PROMPT_REV = 2
 
 export interface MonthCloseNarrativeInput {
   month: string
@@ -230,7 +237,7 @@ export interface MonthCloseNarrativeResult {
  * Bump when the Edge `period_explain` prompt or output contract changes.
  * Included in client hash payload so prompt-only deploys invalidate stale cache rows.
  */
-export const PERIOD_EXPLAIN_PROMPT_REV = 2
+export const PERIOD_EXPLAIN_PROMPT_REV = 3
 
 export interface PeriodExplainInput {
   periodKey: string
@@ -256,4 +263,57 @@ export interface PeriodExplainInput {
 export interface PeriodExplainResult {
   bullets: string[]
   periodKey: string
+}
+
+// ── chat_turn (docs/4 §5.4, §4.8.4; tracker S12) ─────────────────────────────
+
+/**
+ * Read-only ledger snapshot the chat sheet sends with every turn. Aggregates
+ * only — no transaction rows, ids, or memos — built by `buildChatSnapshot` from
+ * the same domain functions the dashboard/reports use (never by re-wrapping a
+ * WebMCP tool's output, docs/4 §4.9). Must serialize to ≤ `contextMaxBytes`.
+ */
+export interface ChatSnapshotMonth {
+  month: string // YYYY-MM
+  income: number
+  expense: number
+  saving: number
+  investment: number
+  balance: number
+  topExpenses: { name: string; amount: number; pct: number }[]
+}
+
+export interface ChatSnapshot {
+  today: string // YYYY-MM-DD
+  currentMonth: string // YYYY-MM — in progress; its totals are month-to-date
+  /** Oldest → newest, ending at `currentMonth`. */
+  months: ChatSnapshotMonth[]
+  /** Current-month budget/goal rows. */
+  achievements: {
+    name: string
+    type: 'expense' | 'saving'
+    target: number
+    actual: number
+    status: ExpenseStatus | SavingStatus
+  }[]
+  /** Last two months compared, biggest movers first. */
+  categoryChanges: {
+    name: string
+    previousAmount: number
+    latestAmount: number
+    delta: number
+    deltaPct: number
+  }[]
+  /** True when the byte cap dropped rows, so the model never claims completeness. */
+  truncated: boolean
+}
+
+export interface ChatTurnInput {
+  /** ≤ 12, each ≤ 500 chars, last one `user` — send `appendUserTurn(...).wire`. */
+  messages: ChatMessage[]
+  context: ChatSnapshot
+}
+
+export interface ChatTurnResult {
+  reply: string
 }
