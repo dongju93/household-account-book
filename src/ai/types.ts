@@ -211,14 +211,14 @@ export interface MonthInsightResult {
  * otherwise, so a prompt-only deploy would keep serving stale bullets for TTL).
  * Included in the client hash payload only — never sent as gateway `input`.
  */
-export const MONTH_INSIGHT_PROMPT_REV = 12
+export const MONTH_INSIGHT_PROMPT_REV = 13
 
 /**
  * Bump when the Edge `month_close_narrative` prompt or output contract changes.
  * Included in the client hash payload only so prompt-only deploys cannot reuse
  * stale `ai_insight_cache` rows.
  */
-export const MONTH_CLOSE_NARRATIVE_PROMPT_REV = 1
+export const MONTH_CLOSE_NARRATIVE_PROMPT_REV = 2
 
 export interface MonthCloseNarrativeInput {
   month: string
@@ -237,7 +237,7 @@ export interface MonthCloseNarrativeResult {
  * Bump when the Edge `period_explain` prompt or output contract changes.
  * Included in client hash payload so prompt-only deploys invalidate stale cache rows.
  */
-export const PERIOD_EXPLAIN_PROMPT_REV = 2
+export const PERIOD_EXPLAIN_PROMPT_REV = 3
 
 export interface PeriodExplainInput {
   periodKey: string
