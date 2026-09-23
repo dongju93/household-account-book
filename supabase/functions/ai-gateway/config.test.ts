@@ -7,7 +7,6 @@ import {
   VISIBLE_OUTPUT_TOKENS,
   isEffectiveInAppAiOptIn,
   maxOutputTokensFor,
-  parseOpenAIModel,
   parseOpenAIReasoningEffort,
   requestDeadlineMsFor,
   tokenEstimateFor,
@@ -24,20 +23,6 @@ describe('AI disclosure consent', () => {
 })
 
 describe('OpenAI deployment config', () => {
-  it.each(['gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'] as const)(
-    'accepts GPT-5.6 family model %s',
-    (model) => {
-      expect(parseOpenAIModel(` ${model} `)).toBe(model)
-    },
-  )
-
-  it.each(['gpt-5.5', 'gpt-4.1', '', 'gpt-5.6-unknown'])(
-    'rejects model outside the supported GPT-5.6 family: %s',
-    (model) => {
-      expect(() => parseOpenAIModel(model)).toThrow('OPENAI_MODEL')
-    },
-  )
-
   it.each(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const)(
     'accepts reasoning effort %s',
     (effort) => {

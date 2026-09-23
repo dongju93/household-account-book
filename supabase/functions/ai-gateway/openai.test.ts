@@ -32,7 +32,7 @@ function requestOptions(fetchImpl: typeof fetch) {
 }
 
 describe('OpenAI Responses API boundary', () => {
-  it('sends the required model policy and maps structured output plus usage', async () => {
+  it('forwards a newly configured model id and maps structured output plus usage', async () => {
     let requestedUrl = ''
     let requestBody: Record<string, unknown> | undefined
     const fetchImpl: typeof fetch = async (input, init) => {
@@ -41,7 +41,7 @@ describe('OpenAI Responses API boundary', () => {
       return new Response(
         JSON.stringify({
           status: 'completed',
-          model: 'gpt-5.6-luna',
+          model: 'gpt-6-luna',
           output: [
             {
               type: 'message',
@@ -54,11 +54,14 @@ describe('OpenAI Responses API boundary', () => {
       )
     }
 
-    const result = await callOpenAIStructured(requestOptions(fetchImpl))
+    const result = await callOpenAIStructured({
+      ...requestOptions(fetchImpl),
+      model: 'gpt-6-luna',
+    })
 
     expect(requestedUrl).toBe('https://api.openai.com/v1/responses')
     expect(requestBody).toMatchObject({
-      model: 'gpt-5.6-luna',
+      model: 'gpt-6-luna',
       max_output_tokens: 16_400,
       reasoning: { effort: 'high' },
       safety_identifier: 'user-opaque-id',
@@ -73,7 +76,7 @@ describe('OpenAI Responses API boundary', () => {
     })
     expect(result).toEqual({
       content: VALID_RESULT,
-      model: 'gpt-5.6-luna',
+      model: 'gpt-6-luna',
       promptTokens: 123,
       completionTokens: 45,
     })

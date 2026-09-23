@@ -18,7 +18,6 @@ import {
   tokenEstimateFor,
   type AiFeature,
   type MinRole,
-  type OpenAIModel,
   type OpenAIReasoningEffort,
 } from './config.ts'
 import { MESSAGES, errorBody, httpStatusFor, quotaExceededMessage } from './errors.ts'
@@ -87,7 +86,7 @@ export interface GatewayDeps {
   callOpenAI: (args: {
     feature: AiFeature
     input: unknown
-    model: OpenAIModel
+    model: string
     /** Wire `max_output_tokens`: reasoning + visible output, never visible-only. */
     maxOutputTokens: number
     reasoningEffort: OpenAIReasoningEffort
@@ -98,8 +97,8 @@ export interface GatewayDeps {
   nowMs: () => number
   /** Override body size limit (tests). */
   maxBodyBytes?: number
-  /** Required deployment model, parsed from `OPENAI_MODEL`. */
-  model: OpenAIModel
+  /** Required deployment model from `OPENAI_MODEL`; OpenAI checks support. */
+  model: string
   /** Required reasoning effort, parsed from `OPENAI_REASONING_EFFORT`. */
   reasoningEffort: OpenAIReasoningEffort
 }

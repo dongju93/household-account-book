@@ -11,7 +11,6 @@ import {
   CACHE_TTL_MS,
   CACHE_TRIM_KEEP,
   isEffectiveInAppAiOptIn,
-  parseOpenAIModel,
   parseOpenAIReasoningEffort,
   type AiFeature,
   type MinRole,
@@ -56,7 +55,7 @@ function buildDeps(req: Request): GatewayDeps {
   const anonKey = requiredEnv('SUPABASE_ANON_KEY')
   const serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY')
   const openaiKey = Deno.env.get('OPENAI_API_KEY') ?? ''
-  const model = parseOpenAIModel(requiredEnv('OPENAI_MODEL'))
+  const model = requiredEnv('OPENAI_MODEL')
   const reasoningEffort = parseOpenAIReasoningEffort(requiredEnv('OPENAI_REASONING_EFFORT'))
 
   // User-scoped client: JWT from caller → getUser + is_ledger_member (auth.uid()).

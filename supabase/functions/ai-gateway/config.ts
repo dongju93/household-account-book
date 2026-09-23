@@ -23,9 +23,6 @@ export function isEffectiveInAppAiOptIn(
   return enabled === true && disclosureVersion === AI_DISCLOSURE_VERSION
 }
 
-export const OPENAI_MODELS = ['gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'] as const
-export type OpenAIModel = (typeof OPENAI_MODELS)[number]
-
 /**
  * Reasoning effort accepted by `OPENAI_REASONING_EFFORT`.
  * Mirrors the Responses API enum (`none` … `max`); the API notes not every
@@ -194,15 +191,6 @@ export function requestDeadlineMsFor(effort: OpenAIReasoningEffort): number {
 
 export function isAiFeature(value: unknown): value is AiFeature {
   return typeof value === 'string' && (AI_FEATURES as readonly string[]).includes(value)
-}
-
-/** Parse the required deployment model once at the environment boundary. */
-export function parseOpenAIModel(value: string): OpenAIModel {
-  const model = value.trim()
-  if (!(OPENAI_MODELS as readonly string[]).includes(model)) {
-    throw new Error(`OPENAI_MODEL must be one of: ${OPENAI_MODELS.join(', ')}`)
-  }
-  return model as OpenAIModel
 }
 
 /** Parse the required reasoning effort at the environment boundary. */

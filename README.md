@@ -390,7 +390,7 @@ supabase secrets set AI_FEATURES_ENABLED=false
 
 플랫폼이 주입하는 값(`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`)은 보통 별도 설정이 필요 없습니다. 로컬 서빙 시에는 `supabase start` 환경에 맞춰 자동 주입됩니다.
 
-`OPENAI_MODEL`·`OPENAI_REASONING_EFFORT`는 시작 시 파싱되며 폴백이 없습니다. 값이 잘못되면 킬 스위치보다 먼저 걸려 모든 요청이 502로 떨어지므로, **첫 배포 전에 반드시 설정**합니다. effort를 올리면 요청당 생성 가능한 토큰(추론 포함)과 쿼터 예약량이 함께 올라갑니다 — 근거와 조정 지점은 `supabase/functions/ai-gateway/README.md` 참고.
+`OPENAI_MODEL`·`OPENAI_REASONING_EFFORT`는 폴백이 없습니다. 모델 설정이 없거나 비어 있거나 effort 값이 잘못되면 킬 스위치보다 먼저 걸려 모든 요청이 502로 떨어지므로, **첫 배포 전에 반드시 설정**합니다. 모델 ID의 형식이나 허용 목록은 게이트웨이에서 검사하지 않고 OpenAI에 그대로 전달합니다. effort를 올리면 요청당 생성 가능한 토큰(추론 포함)과 쿼터 예약량이 함께 올라갑니다 — 근거와 조정 지점은 `supabase/functions/ai-gateway/README.md` 참고.
 
 ### 2. 함수 배포 / 롤백
 

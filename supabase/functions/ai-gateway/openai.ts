@@ -10,7 +10,6 @@ import {
   OPENAI_BASE_URL,
   requestDeadlineMsFor,
   type AiFeature,
-  type OpenAIModel,
   type OpenAIReasoningEffort,
 } from './config.ts'
 import { buildFeaturePrompt } from './schemas.ts'
@@ -60,7 +59,7 @@ export async function callOpenAIStructured(options: {
   apiKey: string
   feature: AiFeature
   input: unknown
-  model: OpenAIModel
+  model: string
   /** Wire `max_output_tokens`: reasoning + visible output. See `maxOutputTokensFor`. */
   maxOutputTokens: number
   reasoningEffort: OpenAIReasoningEffort
@@ -154,7 +153,7 @@ function withRejectionNote(user: string, lastParseError: Error | null): string {
 async function createResponse(args: {
   fetchImpl: FetchLike
   apiKey: string
-  model: OpenAIModel
+  model: string
   maxOutputTokens: number
   reasoningEffort: OpenAIReasoningEffort
   safetyIdentifier: string

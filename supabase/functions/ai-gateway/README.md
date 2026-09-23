@@ -22,23 +22,25 @@ re-enable under the new copy before data is sent.
 
 ## Secrets
 
-| Name                        | Required | Notes                                                         |
-| --------------------------- | -------- | ------------------------------------------------------------- |
-| `OPENAI_API_KEY`            | yes      | OpenAI server-side API key                                    |
-| `OPENAI_MODEL`              | yes      | `gpt-5.6`, `gpt-5.6-sol`, `gpt-5.6-terra`, or `gpt-5.6-luna`  |
-| `OPENAI_REASONING_EFFORT`   | yes      | `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max` |
-| `AI_FEATURES_ENABLED`       | yes\*    | only `true` enables paid calls                                |
-| `AI_CHAT_ENABLED`           | no       | `chat_turn` rollout flag; only `true` opens chat (see below)  |
-| `SUPABASE_URL`              | auto     | platform                                                      |
-| `SUPABASE_ANON_KEY`         | auto     | user JWT / getUser                                            |
-| `SUPABASE_SERVICE_ROLE_KEY` | auto     | quota + cache writes                                          |
+| Name                        | Required | Notes                                                                  |
+| --------------------------- | -------- | ---------------------------------------------------------------------- |
+| `OPENAI_API_KEY`            | yes      | OpenAI server-side API key                                             |
+| `OPENAI_MODEL`              | yes      | Model ID forwarded to OpenAI without a local format or allowlist check |
+| `OPENAI_REASONING_EFFORT`   | yes      | `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`          |
+| `AI_FEATURES_ENABLED`       | yes\*    | only `true` enables paid calls                                         |
+| `AI_CHAT_ENABLED`           | no       | `chat_turn` rollout flag; only `true` opens chat (see below)           |
+| `SUPABASE_URL`              | auto     | platform                                                               |
+| `SUPABASE_ANON_KEY`         | auto     | user JWT / getUser                                                     |
+| `SUPABASE_SERVICE_ROLE_KEY` | auto     | quota + cache writes                                                   |
 
 \*Dark launch: keep `false` until privacy gate (S04) + allowlist.
 
-`OPENAI_MODEL` and `OPENAI_REASONING_EFFORT` are parsed at startup and have **no
-fallback** — an invalid value fails every request with `upstream` (502) and an
-`ai_gateway_config_error` log line. This check runs _before_ `AI_FEATURES_ENABLED`,
-so the kill switch cannot mask a bad model id. Set all secrets before first deploy.
+`OPENAI_MODEL` and `OPENAI_REASONING_EFFORT` have **no fallback**. A missing or
+empty model setting, or an invalid effort, fails every request with `upstream`
+(502) and an `ai_gateway_config_error` log line. This check runs _before_
+`AI_FEATURES_ENABLED`. The gateway does not check model ID format or maintain a
+model allowlist; OpenAI determines whether the configured project can use it.
+Set all secrets before first deploy.
 
 Not every reasoning model supports every effort value; a rejected value comes back
 as `upstream` + HTTP 400 from the provider, not as a config error.
@@ -158,7 +160,7 @@ Common mappings:
   `error_detail` carries the exact validator message; fix the **prompt** to state that constraint
   numerically, and bump `MONTH_INSIGHT_PROMPT_REV` so the cache does not serve stale bullets.
 
-A config-time failure (bad `OPENAI_MODEL` / `OPENAI_REASONING_EFFORT` / missing Supabase env)
+A config-time failure (missing or empty `OPENAI_MODEL` / invalid `OPENAI_REASONING_EFFORT` / missing Supabase env)
 logs `audit: "ai_gateway_config_error"` instead and never reaches the audit line above.
 
 Redeploy after this logging lands, reproduce one request, then read Edge Functions → ai-gateway → Logs for the audit line.
