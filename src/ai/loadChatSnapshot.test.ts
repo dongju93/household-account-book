@@ -146,3 +146,58 @@ describe('loadChatSnapshot viewer readiness (fail closed)', () => {
     expect(mockedListSkipped).not.toHaveBeenCalled()
   })
 })
+
+describe('loadChatSnapshot month-to-date totals', () => {
+  // NOW is 2026-09-19; the prompt presents current-month totals as "through today".
+  const futureExpense: Transaction = {
+    ...rentOccurrence('2026-09'),
+    id: 't-future',
+    txnDate: '2026-09-25',
+    amount: 90_000,
+    source: 'manual',
+    recurringId: null,
+    occurrenceMonth: null,
+  }
+  const todayExpense: Transaction = {
+    ...futureExpense,
+    id: 't-today',
+    txnDate: '2026-09-19',
+    amount: 10_000,
+  }
+
+  it('excludes current-month rows dated after today from totals, breakdowns, and achievements', async () => {
+    mockedFetchTxns.mockResolvedValue([
+      ...WINDOW_KEYS.map(rentOccurrence),
+      todayExpense,
+      futureExpense,
+    ])
+
+    const snapshot = await loadChatSnapshot('ledger-1', { canEdit: true })
+    const current = snapshot.months.find((m) => m.month === '2026-09')!
+
+    expect(current.expense).toBe(RENT.amount + todayExpense.amount)
+    expect(current.topExpenses).toEqual([
+      expect.objectContaining({ name: '주거', amount: RENT.amount + todayExpense.amount }),
+    ])
+    expect(snapshot.achievements).toEqual([
+      expect.objectContaining({ name: '주거', actual: RENT.amount + todayExpense.amount }),
+    ])
+    expect(snapshot.categoryChanges).toEqual([
+      expect.objectContaining({ name: '주거', latestAmount: RENT.amount + todayExpense.amount }),
+    ])
+  })
+
+  it('still counts a later-this-month recurring occurrence as materialized for the viewer canary', async () => {
+    const lateRent: RecurringItem = { ...RENT, dayOfMonth: 25 }
+    mockedListRecurring.mockResolvedValue([lateRent])
+    mockedFetchTxns.mockResolvedValue(
+      WINDOW_KEYS.map((m) => ({ ...rentOccurrence(m), txnDate: `${m}-25` })),
+    )
+
+    const snapshot = await loadChatSnapshot('ledger-1', { canEdit: false })
+
+    // Present (so no fail-closed), but not yet incurred (so not in the total).
+    expect(snapshot.months.find((m) => m.month === '2026-09')!.expense).toBe(0)
+    expect(snapshot.months.find((m) => m.month === '2026-08')!.expense).toBe(RENT.amount)
+  })
+})

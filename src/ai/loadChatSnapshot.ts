@@ -59,6 +59,7 @@ export async function loadChatSnapshot(
   options: { canEdit: boolean },
 ): Promise<ChatSnapshot> {
   const currentMonth = currentYearMonth()
+  const today = todayISO()
   const months = lastMonths(currentMonth, AI_LIMITS.chatTurn.monthsMax)
   const { start, endExclusive } = monthWindowRange(currentMonth, months.length)
 
@@ -68,17 +69,27 @@ export async function loadChatSnapshot(
     listCategories(ledgerId),
   ])
 
-  const byMonth = groupTransactionsByMonth(months, txns)
-
   if (!options.canEdit) {
-    await assertWindowMaterialized(ledgerId, months, byMonth)
+    // Must see every materialized occurrence, including later-this-month ones:
+    // an occurrence dated after today is present, not missing.
+    await assertWindowMaterialized(ledgerId, months, groupTransactionsByMonth(months, txns))
   }
+
+  // The prompt tells the model current-month figures are totals through
+  // `today`. Future-dated rows (form-entered, or recurring occurrences whose
+  // day has not arrived — materialize inserts the whole month) would otherwise
+  // be presented as already incurred. Past months are entirely <= today, so
+  // this only trims the current month.
+  const byMonth = groupTransactionsByMonth(
+    months,
+    txns.filter((t) => t.txnDate <= today),
+  )
 
   const activeCategories = categories.filter((c) => c.isActive)
   const currentTxns = byMonth.get(monthKey(currentMonth.year, currentMonth.month)) ?? []
 
   return buildChatSnapshot({
-    today: todayISO(),
+    today,
     currentMonth,
     trend: monthlyTrend(byMonth),
     breakdownByMonth: new Map(
