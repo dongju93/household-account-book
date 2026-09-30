@@ -1,24 +1,9 @@
 import { useWebMCP } from '@mcp-b/react-webmcp'
 
+import { loadMonthCloseReview } from '../ai/capabilities/monthClose'
 import { useLedger } from '../auth/useLedger'
-import { listCategories } from '../data/categories'
-import { listRecurring, listSkippedRecurringIds } from '../data/recurring'
-import { fetchTransactionsInRange, materializeMonth } from '../data/summary'
-import { computeAchievements } from '../domain/achievement'
-import {
-  findMissingRecurringOccurrences,
-  MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON,
-  type MonthCloseFinding,
-  reviewMonth,
-} from '../domain/monthClose'
-import {
-  addMonths,
-  currentYearMonth,
-  monthKey,
-  monthRange,
-  parseMonthKey,
-  type YearMonth,
-} from '../lib/month'
+import type { MonthCloseFinding } from '../domain/monthClose'
+import { addMonths, currentYearMonth, parseMonthKey, type YearMonth } from '../lib/month'
 import { NOT_READY_REASON } from './shared'
 
 const MONTH_INPUT_PROPERTY = {
@@ -94,7 +79,7 @@ const INVALID_MONTH_REASON = 'month 형식이 올바르지 않습니다 (YYYY-MM
 /**
  * Unlike every other tool in `src/webmcp/`, this one is NOT read-only: its
  * handler calls `materializeMonth`, which can insert rows into `transactions`
- * (see `loadMonthCloseReview` below). Do not spread the shared
+ * (see `loadMonthCloseReview` in `src/ai/capabilities/monthClose.ts`). Do not spread the shared
  * `READ_ONLY_ANNOTATIONS` here — `readOnlyHint: true` is a signal MCP clients
  * use to decide whether a tool call needs user confirmation, and claiming it
  * for a tool that writes would let an agent silently materialize recurring
@@ -121,14 +106,17 @@ interface MonthCloseOutput {
 }
 
 /**
- * Fetches everything `reviewMonth` needs for `ym` and runs it. Unlike the
- * screen-mounted budget_pace and qna tools, this tool is not backed by any
- * screen's already-loaded data — it materializes and fetches for itself on
+ * Thin protocol wrapper over the shared `loadMonthCloseReview` capability
+ * (`src/ai/capabilities/monthClose.ts`, also used by the in-app narrative):
+ * guards the unresolved ledger, parses the `month` input, and flattens the
+ * capability's result into this tool's output shape. Unlike the screen-mounted
+ * budget_pace and qna tools, this tool is not backed by any screen's
+ * already-loaded data — the capability materializes and fetches for itself on
  * every call. Viewers get `ready: false` when the month still has eligible
  * recurring rows with no occurrence (materialize is editor-only); see
  * `MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON`.
  */
-async function loadMonthCloseReview(
+async function runMonthCloseReview(
   ledgerId: string | null,
   canEdit: boolean,
   monthInput: string | undefined,
@@ -137,54 +125,9 @@ async function loadMonthCloseReview(
 
   const resolved = resolveReviewMonth(monthInput)
   if ('error' in resolved) return { ready: false, reason: resolved.error }
-  const { ym } = resolved
 
-  await materializeMonth(ledgerId, ym)
-
-  const range = monthRange(ym.year, ym.month)
-  const [recurringItems, categories, txns, skippedRecurringIds] = await Promise.all([
-    listRecurring(ledgerId),
-    listCategories(ledgerId),
-    fetchTransactionsInRange(ledgerId, range.start, range.endExclusive),
-    listSkippedRecurringIds(ledgerId, ym),
-  ])
-
-  // Items intentionally skipped for `ym` were never supposed to materialize —
-  // dropping them here keeps `findMissingRecurringOccurrences` from ever
-  // reading a deliberate skip as a materialization bug.
-  const eligibleRecurring = recurringItems.filter((r) => !skippedRecurringIds.has(r.id))
-
-  // Viewers cannot write occurrences. Incomplete materialization must not
-  // become findings or a false clean review — fail closed until an editor
-  // has opened (materialized) the month.
-  if (!canEdit && findMissingRecurringOccurrences(eligibleRecurring, txns, ym).length > 0) {
-    return { ready: false, reason: MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON }
-  }
-
-  const activeCategories = categories.filter((c) => c.isActive)
-  const achievements = computeAchievements(activeCategories, txns).filter(
-    (r) => r.target > 0 || r.actual > 0,
-  )
-
-  const { needsCheck, forReference, truncated } = reviewMonth({
-    recurringItems: eligibleRecurring,
-    txns,
-    categories,
-    achievements,
-    ym,
-  })
-
-  return {
-    ready: true,
-    month: monthKey(ym.year, ym.month),
-    needsCheck,
-    forReference,
-    noIssueSummary: {
-      categoriesChecked: activeCategories.length,
-      transactionsChecked: txns.length,
-    },
-    truncated,
-  }
+  const result = await loadMonthCloseReview(ledgerId, resolved.ym, { canEdit })
+  return result.ready ? { ready: true, ...result.review } : result
 }
 
 /**
@@ -205,7 +148,7 @@ export function useMonthCloseTools(): void {
       inputSchema: INPUT_SCHEMA,
       outputSchema: OUTPUT_SCHEMA,
       annotations: { title: '월 마감 점검', ...MONTH_CLOSE_ANNOTATIONS },
-      handler: (input) => loadMonthCloseReview(ledgerId, canEdit, input.month),
+      handler: (input) => runMonthCloseReview(ledgerId, canEdit, input.month),
     },
     [ledgerId, canEdit],
   )

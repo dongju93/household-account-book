@@ -1,92 +1,29 @@
 /**
- * Dedicated loader + Edge-input builder for the month-close narrative
+ * In-app adapter + Edge-input builder for the month-close narrative
  * (docs/4 §5.5, PR-7 / tracker S07).
  *
- * Mirrors the WebMCP `loadMonthCloseReview` flow on purpose instead of
- * importing it: P0/P0.5 keeps in-app AI on thin local helpers and defers the
- * shared-capability extraction (with behavior-equivalence tests) to PR-14 —
- * see docs/4 §4.9. The Dashboard's own loader (categories + trend txns) is not
- * enough here: `reviewMonth` also needs recurring items and skips, and the
- * materialize-before-read step must be owned by this loader so a stale screen
- * window can never produce under-counted findings (docs/2-2 invariant).
- *
- * Viewers: `materialize_recurring` is a no-op for non-editors. If eligible
- * recurring rows still have no occurrence after that call, fail closed rather
- * than returning an incomplete review (false clean / under-counted budgets).
- * Already-materialized months (an editor opened them earlier) still work for
- * viewers — min Edge role stays `viewer`.
+ * The load itself (materialize → recurring/skips → txns → `reviewMonth`, with
+ * the viewer fail-closed rule) lives in the shared capability
+ * `capabilities/monthClose.ts`, which the WebMCP `month_close_review` tool also
+ * uses (tracker S14). This file only adapts it for `useAsyncData`: a
+ * not-ready result is thrown so the section renders its error state.
  */
 
-import { listCategories } from '../data/categories'
-import { listRecurring, listSkippedRecurringIds } from '../data/recurring'
-import { fetchTransactionsInRange, materializeMonth } from '../data/summary'
-import { computeAchievements } from '../domain/achievement'
-import {
-  findMissingRecurringOccurrences,
-  MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON,
-  type MonthCloseFinding,
-  reviewMonth,
-} from '../domain/monthClose'
-import { monthKey, monthRange, type YearMonth } from '../lib/month'
+import type { MonthCloseFinding } from '../domain/monthClose'
+import type { YearMonth } from '../lib/month'
+import { loadMonthCloseReview, type MonthCloseReviewData } from './capabilities/monthClose'
 import { AI_LIMITS, type MonthCloseNarrativeInput } from './types'
 
-export interface MonthCloseReviewData {
-  month: string
-  needsCheck: MonthCloseFinding[]
-  forReference: MonthCloseFinding[]
-  noIssueSummary: { categoriesChecked: number; transactionsChecked: number }
-  truncated: boolean
-}
+export type { MonthCloseReviewData }
 
 export async function loadMonthCloseForNarrative(
   ledgerId: string,
   ym: YearMonth,
   options: { canEdit: boolean },
 ): Promise<MonthCloseReviewData> {
-  await materializeMonth(ledgerId, ym)
-
-  const range = monthRange(ym.year, ym.month)
-  const [recurringItems, categories, txns, skippedRecurringIds] = await Promise.all([
-    listRecurring(ledgerId),
-    listCategories(ledgerId),
-    fetchTransactionsInRange(ledgerId, range.start, range.endExclusive),
-    listSkippedRecurringIds(ledgerId, ym),
-  ])
-
-  // A deliberate skip for `ym` was never supposed to materialize — drop it so
-  // `findMissingRecurringOccurrences` can't read it as a materialization bug.
-  const eligibleRecurring = recurringItems.filter((r) => !skippedRecurringIds.has(r.id))
-
-  // Viewers cannot insert recurring occurrences. Incomplete materialization is
-  // a readiness failure, not a set of `missing_recurring` findings — those
-  // canaries are only meaningful after an editor-side materialize attempt.
-  if (!options.canEdit && findMissingRecurringOccurrences(eligibleRecurring, txns, ym).length > 0) {
-    throw new Error(MONTH_CLOSE_MATERIALIZE_INCOMPLETE_REASON)
-  }
-
-  const activeCategories = categories.filter((c) => c.isActive)
-  const achievements = computeAchievements(activeCategories, txns).filter(
-    (r) => r.target > 0 || r.actual > 0,
-  )
-
-  const { needsCheck, forReference, truncated } = reviewMonth({
-    recurringItems: eligibleRecurring,
-    txns,
-    categories,
-    achievements,
-    ym,
-  })
-
-  return {
-    month: monthKey(ym.year, ym.month),
-    needsCheck,
-    forReference,
-    noIssueSummary: {
-      categoriesChecked: activeCategories.length,
-      transactionsChecked: txns.length,
-    },
-    truncated,
-  }
+  const result = await loadMonthCloseReview(ledgerId, ym, options)
+  if (!result.ready) throw new Error(result.reason)
+  return result.review
 }
 
 /**
