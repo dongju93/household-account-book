@@ -16,6 +16,21 @@ export default defineConfig({
     ...tailwindcss(),
     spaFallback(),
   ] as unknown as PluginOption[],
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              // Cache the React runtime independently from app and WebMCP changes.
+              name: 'react-vendor',
+              test: /[\\/]node_modules[\\/](?:react|react-dom|scheduler)[\\/]/,
+            },
+          ],
+        },
+      },
+    },
+  },
   test: {
     // Component tests need a DOM; jsdom is the lightweight standard for Vitest.
     environment: 'jsdom',
