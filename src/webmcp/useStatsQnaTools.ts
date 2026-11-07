@@ -314,7 +314,7 @@ export function useStatsQnaTools(period: ReportPeriodMonths, ready: boolean): vo
       inputSchema: TREND_INPUT_SCHEMA,
       outputSchema: TREND_OUTPUT_SCHEMA,
       annotations: { title: '월별 추이 요약', ...READ_ONLY_ANNOTATIONS },
-      handler: (input) => loadMonthlyTrend(ledgerId, ready, input.periodMonths ?? period),
+      execute: (input) => loadMonthlyTrend(ledgerId, ready, input.periodMonths ?? period),
     },
     [ledgerId, ready, period, version],
   )
@@ -327,7 +327,7 @@ export function useStatsQnaTools(period: ReportPeriodMonths, ready: boolean): vo
       inputSchema: CATEGORY_DETAIL_INPUT_SCHEMA,
       outputSchema: CATEGORY_DETAIL_OUTPUT_SCHEMA,
       annotations: { title: '카테고리별 추이 조회', ...READ_ONLY_ANNOTATIONS },
-      handler: (input) =>
+      execute: (input) =>
         loadCategoryDetail(ledgerId, ready, input.categoryName, input.periodMonths ?? period),
     },
     [ledgerId, ready, period, version],
@@ -341,7 +341,7 @@ export function useStatsQnaTools(period: ReportPeriodMonths, ready: boolean): vo
       inputSchema: COMPARE_INPUT_SCHEMA,
       outputSchema: COMPARE_OUTPUT_SCHEMA,
       annotations: { title: '이번 달 vs 지난달 비교', ...READ_ONLY_ANNOTATIONS },
-      handler: () => loadComparePeriods(ledgerId, ready),
+      execute: () => loadComparePeriods(ledgerId, ready),
     },
     [ledgerId, ready, version],
   )

@@ -148,7 +148,7 @@ export function useMonthCloseTools(): void {
       inputSchema: INPUT_SCHEMA,
       outputSchema: OUTPUT_SCHEMA,
       annotations: { title: '월 마감 점검', ...MONTH_CLOSE_ANNOTATIONS },
-      handler: (input) => runMonthCloseReview(ledgerId, canEdit, input.month),
+      execute: (input) => runMonthCloseReview(ledgerId, canEdit, input.month),
     },
     [ledgerId, canEdit],
   )

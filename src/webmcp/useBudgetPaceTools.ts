@@ -215,7 +215,7 @@ export function useBudgetPaceTools(): void {
       inputSchema: OVERVIEW_INPUT_SCHEMA,
       outputSchema: OVERVIEW_OUTPUT_SCHEMA,
       annotations: { title: '이번 달 예산 페이스 요약', ...READ_ONLY_ANNOTATIONS },
-      handler: (input) => loadOverview(ledgerId, input.month),
+      execute: (input) => loadOverview(ledgerId, input.month),
     },
     [ledgerId, version],
   )
@@ -227,7 +227,7 @@ export function useBudgetPaceTools(): void {
       inputSchema: CATEGORY_INPUT_SCHEMA,
       outputSchema: CATEGORY_OUTPUT_SCHEMA,
       annotations: { title: '카테고리별 예산 페이스 조회', ...READ_ONLY_ANNOTATIONS },
-      handler: (input) => loadCategory(ledgerId, input.categoryName, input.month),
+      execute: (input) => loadCategory(ledgerId, input.categoryName, input.month),
     },
     [ledgerId, version],
   )
