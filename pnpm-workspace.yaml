@@ -1,14 +1,23 @@
 minimumReleaseAgeExclude:
-  - '@babel/core@8.0.1'
-  - '@voidzero-dev/vite-plus-core@0.2.0'
-  - '@voidzero-dev/vite-plus-darwin-arm64@0.2.0'
-  - '@voidzero-dev/vite-plus-darwin-x64@0.2.0'
-  - '@voidzero-dev/vite-plus-linux-arm64-gnu@0.2.0'
-  - '@voidzero-dev/vite-plus-linux-arm64-musl@0.2.0'
-  - '@voidzero-dev/vite-plus-linux-x64-gnu@0.2.0'
-  - '@voidzero-dev/vite-plus-linux-x64-musl@0.2.0'
-  - '@voidzero-dev/vite-plus-win32-arm64-msvc@0.2.0'
-  - '@voidzero-dev/vite-plus-win32-x64-msvc@0.2.0'
-  - vite-plus@0.2.0
-patchedDependencies:
-  '@mcp-b/global@4.0.0': patches/@mcp-b__global@4.0.0.patch
+  - '@tailwindcss/node@4.3.5'
+  - '@tailwindcss/oxide-android-arm64@4.3.5'
+  - '@tailwindcss/oxide-darwin-arm64@4.3.5'
+  - '@tailwindcss/oxide-darwin-x64@4.3.5'
+  - '@tailwindcss/oxide-freebsd-x64@4.3.5'
+  - '@tailwindcss/oxide-linux-arm-gnueabihf@4.3.5'
+  - '@tailwindcss/oxide-linux-arm64-gnu@4.3.5'
+  - '@tailwindcss/oxide-linux-arm64-musl@4.3.5'
+  - '@tailwindcss/oxide-linux-x64-gnu@4.3.5'
+  - '@tailwindcss/oxide-linux-x64-musl@4.3.5'
+  - '@tailwindcss/oxide-wasm32-wasi@4.3.5'
+  - '@tailwindcss/oxide-win32-arm64-msvc@4.3.5'
+  - '@tailwindcss/oxide-win32-x64-msvc@4.3.5'
+  - '@tailwindcss/oxide@4.3.5'
+  - '@tailwindcss/vite@4.3.5'
+  - tailwindcss@4.3.5
+overrides:
+  vite@*: npm:@voidzero-dev/vite-plus-core@1.5.0
+  vitest@*: 5.1.0
+peerDependencyRules:
+  allowedVersions:
+    vite: 1.5.0
