@@ -83,11 +83,13 @@ export function BottomSheet({
   onClose,
   title,
   children,
+  dismissible = true,
 }: {
   open: boolean
   onClose: () => void
   title?: string
   children: ReactNode
+  dismissible?: boolean
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -181,6 +183,7 @@ export function BottomSheet({
   }
 
   function beginDrag(e: ReactPointerEvent<HTMLDivElement>) {
+    if (!dismissible) return
     // Secondary mouse buttons open context menus; they must not grab the sheet.
     if (e.pointerType === 'mouse' && e.button !== 0) return
     const panel = panelRef.current
@@ -280,11 +283,15 @@ export function BottomSheet({
   return (
     <dialog
       ref={dialogRef}
-      closedby="any"
+      closedby={dismissible ? 'any' : 'none'}
       aria-labelledby={title ? titleId : undefined}
+      onCancel={(e) => {
+        e.preventDefault()
+        if (dismissible) onClose()
+      }}
       onClose={onClose}
       onClick={(e) => {
-        if (e.target === dialogRef.current) onClose()
+        if (dismissible && e.target === dialogRef.current) onClose()
       }}
       className="bottom-sheet fixed z-(--z-sheet) m-0 max-w-none border-0 bg-transparent p-0"
     >
@@ -309,6 +316,7 @@ export function BottomSheet({
           <button
             type="button"
             data-sheet-grabber
+            disabled={!dismissible}
             aria-label="닫기"
             // Pointer taps are resolved in `endDrag`; this fires only for the
             // keyboard, which `detail === 0` identifies exactly (a real click

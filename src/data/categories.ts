@@ -6,7 +6,7 @@ import { mapCategory } from './mappers'
 
 export async function listCategories(
   ledgerId: string,
-  opts: { activeOnly?: boolean } = {},
+  opts: { activeOnly?: boolean; signal?: AbortSignal } = {},
 ): Promise<Category[]> {
   let query = supabase
     .from('categories')
@@ -16,6 +16,7 @@ export async function listCategories(
     .order('created_at', { ascending: true })
 
   if (opts.activeOnly) query = query.eq('is_active', true)
+  if (opts.signal) query = query.abortSignal(opts.signal)
 
   const { data, error } = await query
   if (error) throw error

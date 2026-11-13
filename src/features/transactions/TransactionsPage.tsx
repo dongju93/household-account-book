@@ -36,13 +36,14 @@ import {
   TextInput,
   TransactionListSkeleton,
 } from '../../ui'
+import { CsvImportSheet } from './CsvImportSheet'
 import { DuplicateSuspectBanner } from './DuplicateSuspectBanner'
 import { TransactionSheet } from './TransactionSheet'
 import { TxnRow } from './TxnRow'
 
 export function TransactionsPage() {
   useDocumentTitle('내역')
-  const { ledgerId } = useLedger()
+  const { ledgerId, canEdit } = useLedger()
   const { version, refresh } = useRefresh()
 
   const [ym, setYm] = useState(currentYearMonth())
@@ -52,6 +53,7 @@ export function TransactionsPage() {
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [exportError, setExportError] = useState<DescribedError | null>(null)
 
   useEffect(() => {
@@ -179,6 +181,15 @@ export function TransactionsPage() {
         }
       />
       <ScreenBody className="flex flex-col gap-4">
+        {canEdit && (
+          <Button
+            variant="ghost"
+            onClick={() => setImportOpen(true)}
+            disabled={!ledgerId || catState.loading || !!catState.error}
+          >
+            CSV 일괄 등록
+          </Button>
+        )}
         <search className="flex flex-col gap-3">
           <TextInput
             value={searchInput}
@@ -295,6 +306,15 @@ export function TransactionsPage() {
           categories={activeCategories}
           onSaved={refresh}
           onDelete={() => handleDelete(editing)}
+        />
+      )}
+      {importOpen && ledgerId && canEdit && (
+        <CsvImportSheet
+          key={ledgerId}
+          ledgerId={ledgerId}
+          categories={allCategories}
+          onClose={() => setImportOpen(false)}
+          onSaved={refresh}
         />
       )}
     </>
