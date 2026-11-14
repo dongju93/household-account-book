@@ -1,9 +1,11 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 
 import { cn } from '../lib/cn'
 import type { YearMonth } from '../lib/month'
-import { formatMonthLabel } from '../lib/month'
+import { currentYearMonth, formatMonthLabel, monthKey, parseMonthKey } from '../lib/month'
+import { BottomSheet } from './BottomSheet'
+import { Button } from './primitives'
 import { IconButton } from './primitives'
 
 // ── App column (mobile-first, centered on desktop) ───────────────────────────
@@ -80,22 +82,70 @@ export function MonthNav({
   value,
   onPrev,
   onNext,
+  onChange,
 }: {
   value: YearMonth
   onPrev: () => void
   onNext: () => void
+  onChange: (value: YearMonth) => void
 }) {
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [selected, setSelected] = useState('')
   return (
     <div className="flex items-center gap-0.5">
       <IconButton label="이전 달" onClick={onPrev}>
         <Caret dir="prev" />
       </IconButton>
-      <span className="tnum text-section min-w-[74px] text-center text-ink">
+      <button
+        type="button"
+        aria-label={`${formatMonthLabel(value)} 월 선택`}
+        className="pressable tnum text-section min-h-11 min-w-[74px] rounded-control text-center text-ink hover:bg-fill1"
+        onClick={() => {
+          setSelected(monthKey(value.year, value.month))
+          setPickerOpen(true)
+        }}
+      >
         {formatMonthLabel(value)}
-      </span>
+      </button>
       <IconButton label="다음 달" onClick={onNext}>
         <Caret dir="next" />
       </IconButton>
+      {pickerOpen && (
+        <BottomSheet open title="월 선택" onClose={() => setPickerOpen(false)}>
+          <div className="flex flex-col gap-3">
+            <label className="flex flex-col gap-2 text-ink">
+              조회할 월
+              <input
+                type="month"
+                className="min-h-11 w-full rounded-control border border-line bg-paper p-3 text-ink"
+                value={selected}
+                onChange={(e) => setSelected(e.target.value)}
+              />
+            </label>
+            <Button
+              disabled={!parseMonthKey(selected)}
+              onClick={() => {
+                const month = parseMonthKey(selected)
+                if (month) {
+                  onChange(month)
+                  setPickerOpen(false)
+                }
+              }}
+            >
+              이동
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                onChange(currentYearMonth())
+                setPickerOpen(false)
+              }}
+            >
+              이번 달로 이동
+            </Button>
+          </div>
+        </BottomSheet>
+      )}
     </div>
   )
 }

@@ -90,6 +90,7 @@ export function DashboardPage() {
         left={
           <MonthNav
             value={ym}
+            onChange={setYm}
             onPrev={() => setYm(addMonths(ym, -1))}
             onNext={() => setYm(addMonths(ym, 1))}
           />
