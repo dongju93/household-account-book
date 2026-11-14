@@ -8,6 +8,7 @@ import type { Category, RecurringItem, Transaction } from '../domain/types'
 import { monthKey, type YearMonth } from '../lib/month'
 
 vi.mock('../data/categories', () => ({ listCategories: vi.fn() }))
+vi.mock('../data/categoryMonthTargets', () => ({ listCategoryMonthTargets: vi.fn(async () => []) }))
 vi.mock('../data/recurring', () => ({ listRecurring: vi.fn(), listSkippedRecurringIds: vi.fn() }))
 vi.mock('../data/summary', () => ({ materializeMonth: vi.fn(), fetchTransactionsInRange: vi.fn() }))
 

@@ -4,6 +4,7 @@ import type { Category, RecurringItem, Transaction } from '../domain/types'
 import { lastMonths, monthKey } from '../lib/month'
 
 vi.mock('../data/categories', () => ({ listCategories: vi.fn() }))
+vi.mock('../data/categoryMonthTargets', () => ({ listCategoryMonthTargets: vi.fn(async () => []) }))
 vi.mock('../data/recurring', () => ({ listRecurring: vi.fn(), listSkippedRecurringIds: vi.fn() }))
 vi.mock('../data/summary', () => ({
   materializeMonths: vi.fn(),
@@ -11,8 +12,10 @@ vi.mock('../data/summary', () => ({
 }))
 
 import { listCategories } from '../data/categories'
+import { listCategoryMonthTargets } from '../data/categoryMonthTargets'
 import { listRecurring, listSkippedRecurringIds } from '../data/recurring'
 import { fetchTransactionsInRange, materializeMonths } from '../data/summary'
+import { parseTargetAmount } from '../domain/categoryMonthTargets'
 import { CHAT_SNAPSHOT_MATERIALIZE_INCOMPLETE_REASON, loadChatSnapshot } from './loadChatSnapshot'
 
 const mockedListCategories = vi.mocked(listCategories)
@@ -83,6 +86,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockedMaterializeMonths.mockResolvedValue(undefined)
   mockedListCategories.mockResolvedValue(CATEGORIES)
+  vi.mocked(listCategoryMonthTargets).mockResolvedValue([])
   mockedListRecurring.mockResolvedValue([RENT])
   mockedListSkipped.mockResolvedValue(new Set())
   mockedFetchTxns.mockResolvedValue(WINDOW_KEYS.map(rentOccurrence))
@@ -93,6 +97,19 @@ afterEach(() => {
 })
 
 describe('loadChatSnapshot viewer readiness (fail closed)', () => {
+  it('uses the current monthly adjustment in the AI achievement snapshot', async () => {
+    vi.mocked(listCategoryMonthTargets).mockResolvedValue([
+      {
+        categoryId: 'housing',
+        month: '2026-09-01',
+        source: 'custom',
+        customAmount: parseTargetAmount(800000)!,
+      },
+    ])
+    const snapshot = await loadChatSnapshot('ledger-1', { canEdit: true })
+    expect(snapshot.achievements[0].target).toBe(800000)
+    expect(listCategoryMonthTargets).toHaveBeenCalledWith('ledger-1', { year: 2026, month: 9 })
+  })
   it('materializes the whole window before reading', async () => {
     await loadChatSnapshot('ledger-1', { canEdit: true })
 

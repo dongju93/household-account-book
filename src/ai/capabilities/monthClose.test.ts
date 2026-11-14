@@ -5,6 +5,9 @@ import type { Category, RecurringItem, Transaction } from '../../domain/types'
 import { monthKey, type YearMonth } from '../../lib/month'
 
 vi.mock('../../data/categories', () => ({ listCategories: vi.fn() }))
+vi.mock('../../data/categoryMonthTargets', () => ({
+  listCategoryMonthTargets: vi.fn(async () => []),
+}))
 vi.mock('../../data/recurring', () => ({
   listRecurring: vi.fn(),
   listSkippedRecurringIds: vi.fn(),
@@ -15,8 +18,10 @@ vi.mock('../../data/summary', () => ({
 }))
 
 import { listCategories } from '../../data/categories'
+import { listCategoryMonthTargets } from '../../data/categoryMonthTargets'
 import { listRecurring, listSkippedRecurringIds } from '../../data/recurring'
 import { fetchTransactionsInRange, materializeMonth } from '../../data/summary'
+import { parseTargetAmount } from '../../domain/categoryMonthTargets'
 import { loadMonthCloseReview } from './monthClose'
 
 const mockedListCategories = vi.mocked(listCategories)
@@ -105,6 +110,7 @@ const RECURRING: RecurringItem[] = [
 beforeEach(() => {
   vi.clearAllMocks()
   mockedListCategories.mockResolvedValue(CATEGORIES)
+  vi.mocked(listCategoryMonthTargets).mockResolvedValue([])
   mockedListRecurring.mockResolvedValue(RECURRING)
   mockedListSkipped.mockResolvedValue(new Set())
   mockedFetchTxns.mockResolvedValue([TXN])
@@ -112,6 +118,20 @@ beforeEach(() => {
 })
 
 describe('loadMonthCloseReview (shared capability, S14 / PR-14)', () => {
+  it('reviews against the selected month target instead of the global budget', async () => {
+    vi.mocked(listCategoryMonthTargets).mockResolvedValue([
+      {
+        categoryId: 'food',
+        month: `${YM_KEY}-01`,
+        source: 'custom',
+        customAmount: parseTargetAmount(200000)!,
+      },
+    ])
+    const result = await loadMonthCloseReview('ledger-1', YM, { canEdit: true })
+    if (!result.ready) throw new Error('expected ready')
+    expect(result.review.needsCheck.map((finding) => finding.kind)).not.toContain('over_budget')
+    expect(listCategoryMonthTargets).toHaveBeenCalledWith('ledger-1', YM)
+  })
   it('materializes before any read, so findings can never under-count', async () => {
     let resolveMaterialize!: () => void
     mockedMaterializeMonth.mockReturnValue(
