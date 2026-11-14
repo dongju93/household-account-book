@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { useUnsavedChanges } from '../../app/useUnsavedChanges'
 import { useValidatedSubmit } from '../../app/useValidatedSubmit'
 import { createRecurring, updateRecurring } from '../../data/recurring'
 import type { FundType } from '../../domain/fundType'
@@ -66,6 +67,12 @@ export function RecurringFormSheet({
   )
   const [memo, setMemo] = useState(item?.memo ?? suggestion?.memo ?? '')
   const { errors, submitError, saving, run } = useValidatedSubmit()
+  const requestClose = useUnsavedChanges(
+    JSON.stringify([type, categoryId, name, amount, startMonth, endMonth, dayOfMonth, memo]),
+    open,
+    saving,
+    onClose,
+  )
 
   const typeCategories = categories.filter((c) => c.type === type)
 
@@ -107,7 +114,7 @@ export function RecurringFormSheet({
   return (
     <BottomSheet
       open={open}
-      onClose={onClose}
+      onClose={requestClose}
       title={editing ? '고정 항목 수정' : suggestion ? '고정 항목 초안 확인' : '고정 항목 추가'}
     >
       {/* BottomSheet now owns the max height and the scroll, so this no longer

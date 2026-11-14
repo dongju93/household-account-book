@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { useUnsavedChanges } from '../../app/useUnsavedChanges'
 import { useValidatedSubmit } from '../../app/useValidatedSubmit'
 import { createCategory, updateCategory } from '../../data/categories'
 import type { CategoryBudgetSuggestion } from '../../domain/budgetSuggestions'
@@ -63,6 +64,12 @@ export function CategoryFormSheet({
   const [goal, setGoal] = useState(category?.goalAmount != null ? String(category.goalAmount) : '')
   const [showBudgetPace, setShowBudgetPace] = useState(category?.showBudgetPace ?? false)
   const { errors, submitError, saving, run } = useValidatedSubmit()
+  const requestClose = useUnsavedChanges(
+    JSON.stringify([type, name, icon, budget, goal, showBudgetPace]),
+    open,
+    saving,
+    onClose,
+  )
 
   async function handleSubmit() {
     await run(
@@ -104,7 +111,11 @@ export function CategoryFormSheet({
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title={editing ? '카테고리 수정' : '카테고리 추가'}>
+    <BottomSheet
+      open={open}
+      onClose={requestClose}
+      title={editing ? '카테고리 수정' : '카테고리 추가'}
+    >
       <div className="flex flex-col gap-4">
         <Field label="구분" hint={editing ? '구분은 변경할 수 없습니다.' : undefined}>
           {editing ? (

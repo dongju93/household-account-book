@@ -32,6 +32,7 @@ import { invokeAiFeature } from '../../ai/client'
 import { getAiUserSettings } from '../../data/aiSettings'
 import {
   createTransaction,
+  updateTransaction,
   fetchMemoHistory,
   fetchNearDuplicateCandidates,
 } from '../../data/transactions'
@@ -88,7 +89,17 @@ function okResponse(
   }
 }
 
-function renderSheet({ canEdit = true }: { canEdit?: boolean } = {}) {
+function renderSheet({
+  canEdit = true,
+  transaction = null,
+  categories = CATEGORIES,
+  onClose = () => {},
+}: {
+  canEdit?: boolean
+  transaction?: Transaction | null
+  categories?: Category[]
+  onClose?: () => void
+} = {}) {
   const auth: AuthValue = {
     status: 'authed',
     user: { id: USER_ID } as AuthValue['user'],
@@ -112,10 +123,10 @@ function renderSheet({ canEdit = true }: { canEdit?: boolean } = {}) {
         <AiSettingsProvider>
           <TransactionSheet
             open
-            onClose={() => {}}
+            onClose={onClose}
             ledgerId={LEDGER_ID}
-            transaction={null}
-            categories={CATEGORIES}
+            transaction={transaction}
+            categories={categories}
             onSaved={() => {}}
           />
         </AiSettingsProvider>
@@ -441,5 +452,63 @@ describe('TransactionSheet pre-save near-duplicate guard (S11 / PR-12)', () => {
 
     await user.click(screen.getByRole('button', { name: '저장' }))
     await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1))
+  })
+})
+
+describe('historical transaction editing', () => {
+  const historical: Transaction = {
+    id: 'old',
+    ledgerId: LEDGER_ID,
+    categoryId: 'c-food',
+    txnDate: '2025-02-01',
+    type: 'expense',
+    amount: 12000,
+    memo: '점심',
+    source: 'manual',
+    recurringId: null,
+    occurrenceMonth: null,
+    createdAt: '',
+    updatedAt: '',
+  }
+
+  it('keeps the original inactive category selected and saves a memo edit without reclassification', async () => {
+    const user = userEvent.setup()
+    renderSheet({
+      transaction: historical,
+      categories: [
+        { ...CATEGORIES[0], isActive: false },
+        { ...CATEGORIES[0], id: 'other-inactive', name: '옛 교통비', isActive: false },
+      ],
+    })
+    expect(screen.getByRole('button', { name: '식비 (비활성)' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.queryByRole('button', { name: '옛 교통비 (비활성)' })).not.toBeInTheDocument()
+    await user.type(screen.getByPlaceholderText('메모'), ' 수정')
+    await user.click(screen.getByRole('button', { name: '저장' }))
+    await waitFor(() =>
+      expect(updateTransaction).toHaveBeenCalledWith(
+        'old',
+        expect.objectContaining({ categoryId: 'c-food', memo: '점심 수정', txnDate: '2025-02-01' }),
+      ),
+    )
+  })
+
+  it('keeps an edited transaction open when the user cancels dismissal', async () => {
+    const user = userEvent.setup()
+    const close = vi.fn()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    renderSheet({ transaction: historical, onClose: close })
+    await user.type(screen.getByPlaceholderText('메모'), ' 수정')
+    const dialog = screen.getByRole('dialog')
+    const cancel = new Event('cancel', { cancelable: true })
+    act(() => {
+      dialog.dispatchEvent(cancel)
+    })
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(close).not.toHaveBeenCalled()
+    expect(screen.getByPlaceholderText('메모')).toHaveValue('점심 수정')
+    confirm.mockRestore()
   })
 })
