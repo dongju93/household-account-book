@@ -67,7 +67,6 @@ export function TransactionsPage() {
     [ledgerId, version],
   )
   const allCategories = catState.data ?? []
-  const activeCategories = allCategories.filter((c) => c.isActive)
   const nameById = new Map(allCategories.map((c) => [c.id, c.name]))
   const iconById = new Map(allCategories.map((c) => [c.id, c.icon]))
 
@@ -94,6 +93,8 @@ export function TransactionsPage() {
     loading,
     loadingMore,
     error: listError,
+    loadMoreError,
+    retry,
     hasMore,
     loadMore,
   } = usePaginatedList<Transaction, TxnCursor>({
@@ -145,6 +146,7 @@ export function TransactionsPage() {
         left={
           <MonthNav
             value={ym}
+            onChange={setYm}
             onPrev={() => setYm(addMonths(ym, -1))}
             onNext={() => setYm(addMonths(ym, 1))}
           />
@@ -197,6 +199,7 @@ export function TransactionsPage() {
             placeholder="메모 검색"
             aria-label="메모 검색"
           />
+          <p className="text-caption text-ink2">선택한 월의 메모에서 검색합니다.</p>
           {/* §6.4: 구분 chips and the category select are one filter region rather
               than two loose rows. Values and behaviour are untouched. */}
           <div
@@ -225,11 +228,12 @@ export function TransactionsPage() {
               onChange={(e) => setCategoryId(e.target.value || null)}
             >
               <option value="">전체 카테고리</option>
-              {activeCategories
+              {allCategories
                 .filter((c) => !type || c.type === type)
                 .map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
+                    {!c.isActive ? ' (비활성)' : ''}
                   </option>
                 ))}
             </Select>
@@ -242,6 +246,11 @@ export function TransactionsPage() {
             message={(listError ?? exportError)!.message}
             variant={(listError ?? exportError)!.permission ? 'permission' : 'error'}
           />
+        )}
+        {listError && (
+          <Button variant="ghost" onClick={retry}>
+            다시 불러오기
+          </Button>
         )}
         {/* §13 counts 빈 데이터 and 필터 결과 없음 as two separate states. Showing
             the "add your first transaction" copy while a filter is narrowing a
@@ -260,7 +269,14 @@ export function TransactionsPage() {
         )}
 
         {!loading && !listError && (
-          <DuplicateSuspectBanner groups={duplicateGroups} categoryNameById={nameById} />
+          <DuplicateSuspectBanner
+            groups={duplicateGroups}
+            categoryNameById={nameById}
+            onOpenTransaction={(id) => {
+              const txn = rows.find((row) => row.id === id)
+              if (txn) setEditing(txn)
+            }}
+          />
         )}
 
         {!loading &&
@@ -290,9 +306,15 @@ export function TransactionsPage() {
             </section>
           ))}
 
+        {loadMoreError && (
+          <ErrorBanner
+            message={loadMoreError.message}
+            variant={loadMoreError.permission ? 'permission' : 'error'}
+          />
+        )}
         {!loading && !listError && hasMore && (
           <Button variant="ghost" onClick={() => void loadMore()} disabled={loadingMore}>
-            {loadingMore ? '불러오는 중…' : '더 보기'}
+            {loadingMore ? '불러오는 중…' : loadMoreError ? '더 보기 다시 시도' : '더 보기'}
           </Button>
         )}
       </ScreenBody>
@@ -303,7 +325,7 @@ export function TransactionsPage() {
           onClose={() => setEditing(null)}
           ledgerId={ledgerId}
           transaction={editing}
-          categories={activeCategories}
+          categories={allCategories}
           onSaved={refresh}
           onDelete={() => handleDelete(editing)}
         />
