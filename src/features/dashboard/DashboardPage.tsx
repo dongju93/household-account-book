@@ -5,7 +5,7 @@ import { useAsyncData } from '../../app/useAsyncData'
 import { useDocumentTitle } from '../../app/useDocumentTitle'
 import { useRefresh } from '../../app/useRefresh'
 import { useLedger } from '../../auth/useLedger'
-import { listCategories } from '../../data/categories'
+import { loadCategoriesForMonth } from '../../data/monthCategories'
 import { fetchTransactionsInRange, materializeMonths } from '../../data/summary'
 import { computeAchievements } from '../../domain/achievement'
 import {
@@ -19,13 +19,15 @@ import {
   groupTransactionsByMonth,
   monthlyTrend,
 } from '../../domain/reports'
-import { addMonths, currentYearMonth, monthRange, todayISO } from '../../lib/month'
+import type { Category } from '../../domain/types'
+import { addMonths, currentYearMonth, monthKey, monthRange, todayISO } from '../../lib/month'
 import { AppBar, DashboardSkeleton, ErrorBanner, MonthNav, ScreenBody } from '../../ui'
 import { useBudgetPaceTools } from '../../webmcp/useBudgetPaceTools'
 import { AchievementList } from './AchievementList'
 import { AiInsightCard } from './AiInsightCard'
 import { DashboardCharts } from './DashboardCharts'
 import { MonthCloseSection } from './MonthCloseSection'
+import { MonthTargetSheet } from './MonthTargetSheet'
 import { SummaryCards } from './SummaryCards'
 
 const TREND_MONTHS = 6
@@ -33,9 +35,10 @@ const TREND_MONTHS = 6
 export function DashboardPage() {
   useDocumentTitle('대시보드')
   useBudgetPaceTools()
-  const { ledgerId } = useLedger()
-  const { version } = useRefresh()
+  const { ledgerId, canManage } = useLedger()
+  const { version, refresh } = useRefresh()
   const [ym, setYm] = useState(currentYearMonth())
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
 
   const months = Array.from({ length: TREND_MONTHS }, (_, i) =>
     addMonths(ym, -(TREND_MONTHS - 1 - i)),
@@ -46,11 +49,11 @@ export function DashboardPage() {
   const { data, loading, error } = useAsyncData(async () => {
     if (!ledgerId) return null
     await materializeMonths(ledgerId, months)
-    const [rangeTxns, categories] = await Promise.all([
+    const [rangeTxns, monthCategories] = await Promise.all([
       fetchTransactionsInRange(ledgerId, trendStart, sel.endExclusive),
-      listCategories(ledgerId),
+      loadCategoriesForMonth(ledgerId, ym),
     ])
-    return { rangeTxns, categories }
+    return { rangeTxns, ...monthCategories }
   }, [ledgerId, ym.year, ym.month, version])
 
   const rangeTxns = data?.rangeTxns ?? []
@@ -59,8 +62,11 @@ export function DashboardPage() {
   const selTxns = rangeTxns.filter((t) => t.txnDate >= sel.start && t.txnDate < sel.endExclusive)
   const summary = computeMonthSummary(selTxns)
   const activeCategories = categories.filter((c) => c.isActive)
-  const achievements = computeAchievements(activeCategories, selTxns).filter(
-    (r) => r.target > 0 || r.actual > 0,
+  const achievements = computeAchievements(activeCategories, selTxns)
+  const customCategoryIds = new Set(
+    (data?.targets ?? [])
+      .filter((target) => target.source === 'custom')
+      .map((target) => target.categoryId),
   )
   const today = todayISO()
   const paceRows = computeBudgetPaceRows(activeCategories, selTxns, ym, today)
@@ -73,7 +79,7 @@ export function DashboardPage() {
   const insightInput = buildMonthInsightInput({
     ym,
     summary,
-    achievements,
+    achievements: achievements.filter((row) => row.target > 0 || row.actual > 0),
     inProgress: showPace
       ? { asOf: today, paceRows: budgetPaceRowsWithStatus(paceRows, ym) }
       : undefined,
@@ -122,11 +128,33 @@ export function DashboardPage() {
               rows={achievements}
               paceByCategoryId={paceLookup}
               isCurrentMonth={showPace}
+              customCategoryIds={customCategoryIds}
+              onEdit={
+                canManage
+                  ? (categoryId) => {
+                      const category = data?.globalCategories.find((c) => c.id === categoryId)
+                      if (category) setEditingCategory(category)
+                    }
+                  : undefined
+              }
             />
             <DashboardCharts breakdown={breakdown} summary={summary} trend={trend} />
           </>
         )}
       </ScreenBody>
+      {editingCategory && ledgerId === editingCategory.ledgerId && canManage && (
+        <MonthTargetSheet
+          key={`${ledgerId}:${monthKey(ym.year, ym.month)}:${editingCategory.id}`}
+          category={editingCategory}
+          ym={ym}
+          target={data?.targets.find((target) => target.categoryId === editingCategory.id)}
+          onClose={() => setEditingCategory(null)}
+          onSaved={() => {
+            setEditingCategory(null)
+            refresh()
+          }}
+        />
+      )}
     </>
   )
 }

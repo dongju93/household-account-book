@@ -3,7 +3,7 @@ import type { BudgetPaceRow } from '../../domain/budgetPace'
 import { formatPaceHint } from '../../domain/budgetPace'
 import { fundTypeLabel } from '../../domain/fundType'
 import { won } from '../../lib/format'
-import { EmptyState, Progress, SectionHeader, StatusPill } from '../../ui'
+import { EmptyState, Pill, Progress, SectionHeader, StatusPill } from '../../ui'
 import { statusTone } from '../../ui/statusTone'
 import { orderAchievements } from './orderAchievements'
 
@@ -19,11 +19,15 @@ export function AchievementList({
   rows,
   paceByCategoryId,
   isCurrentMonth,
+  customCategoryIds,
+  onEdit,
 }: {
   rows: AchievementRow[]
   paceByCategoryId?: ReadonlyMap<string, BudgetPaceRow>
   /** Drives both the pace hint and the §6.3 ordering rule. */
   isCurrentMonth?: boolean
+  customCategoryIds?: ReadonlySet<string>
+  onEdit?: (categoryId: string) => void
 }) {
   const ordered = orderAchievements(rows, { isCurrentMonth: isCurrentMonth === true })
 
@@ -60,13 +64,26 @@ export function AchievementList({
                 className="flex flex-col gap-2 border-b border-line-soft py-3 last:border-b-0"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="flex min-w-0 items-baseline gap-1.5">
+                  <span className="flex min-w-0 flex-wrap items-baseline gap-1.5">
                     <span className="text-section truncate text-ink">{r.name}</span>
                     <span className="text-caption flex-none text-ink2">
                       {fundTypeLabel(r.type)}
                     </span>
+                    {customCategoryIds?.has(r.categoryId) && <Pill>수정</Pill>}
                   </span>
-                  <StatusPill status={r.status} />
+                  <span className="flex flex-none items-center gap-2">
+                    {onEdit && (
+                      <button
+                        type="button"
+                        aria-label={`${r.name} ${r.type === 'expense' ? '예산' : '목표'} 편집`}
+                        className="pressable hit-tall text-caption min-h-9 rounded-control border border-line px-3 text-ink2 hover:border-ink3 hover:text-ink"
+                        onClick={() => onEdit(r.categoryId)}
+                      >
+                        편집
+                      </button>
+                    )}
+                    <StatusPill status={r.status} />
+                  </span>
                 </div>
                 <Progress
                   pct={hasTarget ? r.pct : r.actual > 0 ? 100 : 0}
