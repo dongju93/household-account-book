@@ -2,7 +2,7 @@ import { useWebMCP } from '@mcp-b/react-webmcp'
 
 import { useRefresh } from '../app/useRefresh'
 import { useLedger } from '../auth/useLedger'
-import { listCategories } from '../data/categories'
+import { loadCategoriesForMonth } from '../data/monthCategories'
 import { fetchTransactionsInRange } from '../data/summary'
 import {
   type BudgetPaceRowWithStatus,
@@ -137,10 +137,11 @@ async function loadOverview(
   const { ym } = resolved
 
   const range = monthRange(ym.year, ym.month)
-  const [txns, categories] = await Promise.all([
+  const [txns, monthCategories] = await Promise.all([
     fetchTransactionsInRange(ledgerId, range.start, range.endExclusive),
-    listCategories(ledgerId, { activeOnly: true }),
+    loadCategoriesForMonth(ledgerId, ym, { activeOnly: true }),
   ])
+  const { categories } = monthCategories
 
   const month = monthKey(ym.year, ym.month)
   const summary = computeMonthSummary(txns)
@@ -182,10 +183,11 @@ async function loadCategory(
   }
 
   const range = monthRange(ym.year, ym.month)
-  const [txns, categories] = await Promise.all([
+  const [txns, monthCategories] = await Promise.all([
     fetchTransactionsInRange(ledgerId, range.start, range.endExclusive),
-    listCategories(ledgerId, { activeOnly: true }),
+    loadCategoriesForMonth(ledgerId, ym, { activeOnly: true }),
   ])
+  const { categories } = monthCategories
 
   const rows = budgetPaceRowsWithStatus(computeBudgetPaceRows(categories, txns, ym, todayISO()), ym)
   const found = resolveCategoryByName(rows, categoryName)

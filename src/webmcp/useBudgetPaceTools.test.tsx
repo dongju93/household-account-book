@@ -9,13 +9,16 @@ import '../webmcp/registerWebMcpRuntime'
 import { callTool, registeredToolNames } from './testHelpers'
 
 vi.mock('../data/categories', () => ({ listCategories: vi.fn() }))
+vi.mock('../data/categoryMonthTargets', () => ({ listCategoryMonthTargets: vi.fn(async () => []) }))
 vi.mock('../data/summary', () => ({
   materializeMonth: vi.fn(),
   fetchTransactionsInRange: vi.fn(),
 }))
 
 import { listCategories } from '../data/categories'
+import { listCategoryMonthTargets } from '../data/categoryMonthTargets'
 import { fetchTransactionsInRange, materializeMonth } from '../data/summary'
+import { parseTargetAmount } from '../domain/categoryMonthTargets'
 import { useBudgetPaceTools } from './useBudgetPaceTools'
 
 const mockedListCategories = vi.mocked(listCategories)
@@ -111,11 +114,33 @@ function renderTools(ledgerId: string | null) {
 beforeEach(() => {
   vi.clearAllMocks()
   mockedListCategories.mockResolvedValue(CATEGORIES)
+  vi.mocked(listCategoryMonthTargets).mockResolvedValue([])
   mockedFetchTxns.mockResolvedValue(TXNS)
   mockedMaterialize.mockResolvedValue(undefined)
 })
 
 describe('useBudgetPaceTools', () => {
+  it('uses the same monthly budget in overview and category tools', async () => {
+    vi.mocked(listCategoryMonthTargets).mockResolvedValue([
+      {
+        categoryId: 'food',
+        month: `${todayISO().slice(0, 7)}-01`,
+        source: 'custom',
+        customAmount: parseTargetAmount(500000)!,
+      },
+    ])
+    renderTools('ledger-1')
+    const overview = await callTool('budget_pace_overview', {})
+    expect(overview.structuredContent).toMatchObject({
+      categories: expect.arrayContaining([
+        expect.objectContaining({ name: '식비', budget: 500000, remainingBudget: 150000 }),
+      ]),
+    })
+    const category = await callTool('budget_pace_category', { categoryName: '식비' })
+    expect(category.structuredContent).toMatchObject({
+      category: { budget: 500000, remainingBudget: 150000 },
+    })
+  })
   it('registers both tools on document.modelContext', async () => {
     renderTools('ledger-1')
     const names = await registeredToolNames()

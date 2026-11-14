@@ -9,6 +9,7 @@ import '../webmcp/registerWebMcpRuntime'
 import { callTool, registeredToolNames } from './testHelpers'
 
 vi.mock('../data/categories', () => ({ listCategories: vi.fn() }))
+vi.mock('../data/categoryMonthTargets', () => ({ listCategoryMonthTargets: vi.fn(async () => []) }))
 vi.mock('../data/recurring', () => ({ listRecurring: vi.fn(), listSkippedRecurringIds: vi.fn() }))
 vi.mock('../data/summary', () => ({ materializeMonth: vi.fn(), fetchTransactionsInRange: vi.fn() }))
 
