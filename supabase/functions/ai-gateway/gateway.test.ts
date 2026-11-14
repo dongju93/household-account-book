@@ -5,7 +5,7 @@
  * Run: pnpm exec vp test run supabase/functions/ai-gateway/gateway.test.ts
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 
 import {
   CACHEABLE_FEATURES,
