@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { beforeAll, describe, expect, it, vi } from 'vite-plus/test'
+import { useState } from 'react'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vite-plus/test'
 
+import { useUnsavedChanges } from '../app/useUnsavedChanges'
 import { BottomSheet } from './BottomSheet'
 
 /*
@@ -85,4 +87,47 @@ describe('BottomSheet dismiss gestures', () => {
     fireEvent.click(grabber, { detail: 0 })
     expect(onClose).toHaveBeenCalledTimes(1)
   })
+})
+
+function GuardedSheet({ busy, onClose }: { busy: boolean; onClose: () => void }) {
+  const [memo, setMemo] = useState('original')
+  const requestClose = useUnsavedChanges(memo, true, busy, onClose)
+  return (
+    <BottomSheet open onClose={requestClose} title="거래 수정">
+      <input aria-label="메모" value={memo} onChange={(e) => setMemo(e.target.value)} />
+    </BottomSheet>
+  )
+}
+
+afterEach(() => vi.restoreAllMocks())
+
+describe.each(['cancel discard', 'busy'] as const)('vetoed dismissal: %s', (reason) => {
+  it.each(['tap', 'swipe'] as const)(
+    'restores the panel after a rejected %s and allows later dismissal',
+    (gesture) => {
+      const onClose = vi.fn()
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+      const { rerender } = render(<GuardedSheet busy={reason === 'busy'} onClose={onClose} />)
+      fireEvent.change(screen.getByLabelText('메모'), { target: { value: 'edited' } })
+      const dialog = screen.getByRole('dialog')
+      const grabber = screen.getByRole('button', { name: '닫기' })
+      const panel = dialog.querySelector<HTMLElement>('.sheet-panel')!
+      const target = gesture === 'tap' ? grabber : grabber.parentElement!
+      drag(target, 100, gesture === 'tap' ? 100 : 260)
+
+      expect(onClose).not.toHaveBeenCalled()
+      expect(confirm).toHaveBeenCalledTimes(reason === 'busy' ? 0 : 1)
+      expect(dialog).toHaveAttribute('open')
+      expect(panel.style.transform).toBe('')
+      expect(dialog).not.toHaveAttribute('data-dragging')
+      expect(dialog.style.getPropertyValue('--sheet-backdrop')).toBe('')
+      expect(screen.getByLabelText('메모')).toHaveValue('edited')
+
+      rerender(<GuardedSheet busy={false} onClose={onClose} />)
+      confirm.mockReturnValue(true)
+      drag(target, 100, gesture === 'tap' ? 100 : 260)
+      expect(onClose).toHaveBeenCalledOnce()
+      expect(panel.style.transform).toContain('100%')
+    },
+  )
 })

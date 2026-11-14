@@ -19,7 +19,8 @@ export function useUnsavedChanges(
   }, [dirty, busy])
 
   return () => {
-    if (busy) return
-    if (!dirty || window.confirm('저장하지 않은 변경 사항을 버리고 닫을까요?')) onClose()
+    if (busy) return false
+    if (dirty && !window.confirm('저장하지 않은 변경 사항을 버리고 닫을까요?')) return false
+    onClose()
   }
 }

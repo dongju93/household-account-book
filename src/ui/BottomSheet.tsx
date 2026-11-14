@@ -86,7 +86,8 @@ export function BottomSheet({
   dismissible = true,
 }: {
   open: boolean
-  onClose: () => void
+  /** Return false to veto a close request and restore any dragged panel. */
+  onClose: () => void | false
   title?: string
   children: ReactNode
   dismissible?: boolean
@@ -253,7 +254,9 @@ export function BottomSheet({
       distance > FLICK_MIN_DISTANCE &&
       distance / elapsed > FLICK_VELOCITY
 
-    if (tappedGrabber || distance > threshold || flicked) {
+    // A guard may refuse dismissal (unsaved edits or an in-flight save).
+    // Only accepted requests may leave the panel in its exit position.
+    if ((tappedGrabber || distance > threshold || flicked) && dismissible && onClose() !== false) {
       // Hand the panel to the exit animation *from where the finger left it*:
       // keep the inline transform, give it the exit timing, and let it run to
       // the same translate the closed-state rule targets. Clearing the transform
@@ -261,7 +264,6 @@ export function BottomSheet({
       dialogRef.current?.removeAttribute('data-dragging')
       panel.style.transition = 'transform var(--dur-sheet-out) var(--ease-drawer)'
       panel.style.transform = 'translate3d(0, 100%, 0)'
-      onClose()
       return
     }
 
