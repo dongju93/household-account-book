@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 
+import { useUnsavedChanges } from '../../app/useUnsavedChanges'
 import { useValidatedSubmit } from '../../app/useValidatedSubmit'
 import {
   createTransaction,
@@ -50,7 +51,7 @@ export function TransactionSheet({
   onClose: () => void
   ledgerId: string
   transaction: Transaction | null // null = create
-  categories: Category[] // active categories
+  categories: Category[] // Active categories plus historical categories in edit mode.
   onSaved: () => void
   onDelete?: () => Promise<void> | void
 }) {
@@ -76,6 +77,12 @@ export function TransactionSheet({
     txns: DuplicateCandidateTxn[]
   } | null>(null)
   const { errors, submitError, saving, run } = useValidatedSubmit()
+  const requestClose = useUnsavedChanges(
+    JSON.stringify([type, categoryId, amount, date, memo]),
+    open && editing,
+    saving || deleting,
+    onClose,
+  )
   const amountErrorId = useId()
   const categoryErrorId = useId()
   const dateErrorId = useId()
@@ -83,11 +90,13 @@ export function TransactionSheet({
   const { suggestions } = useMemoCategorySuggestions({
     ledgerId,
     memo,
-    categories,
+    categories: categories.filter((c) => c.isActive),
     enabled: open,
   })
 
-  const typeCategories = categories.filter((c) => c.type === type)
+  const typeCategories = categories.filter(
+    (c) => c.type === type && (c.isActive || c.id === transaction?.categoryId),
+  )
 
   function changeType(next: FundType) {
     setType(next)
@@ -221,7 +230,7 @@ export function TransactionSheet({
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title={editing ? '거래 수정' : '거래 추가'}>
+    <BottomSheet open={open} onClose={requestClose} title={editing ? '거래 수정' : '거래 추가'}>
       <div className="flex flex-col gap-4">
         {/* §6.5: the natural-language field keeps its current position and its
             apply-only behaviour — it never writes. */}
@@ -318,6 +327,7 @@ export function TransactionSheet({
                   onClick={() => setCategoryId(c.id)}
                 >
                   {c.name}
+                  {!c.isActive ? ' (비활성)' : ''}
                 </Chip>
               ))}
             </div>
@@ -347,6 +357,11 @@ export function TransactionSheet({
             />
           </label>
         </div>
+        {!editing && (
+          <p className="text-caption text-ink2">
+            거래는 위 날짜로 저장됩니다. 조회 중인 월과 다를 수 있습니다.
+          </p>
+        )}
         {errors.date && <FieldError id={dateErrorId}>{errors.date}</FieldError>}
 
         {/* An off-by-default preference for repeat entry, demoted to a plain row.

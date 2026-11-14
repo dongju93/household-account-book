@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, vi } from 'vite-plus/test'
 
 import { findFuzzyDuplicateGroups } from '../../domain/fuzzyDuplicates'
 import type { Transaction } from '../../domain/types'
@@ -65,4 +65,20 @@ describe('DuplicateSuspectBanner (S11 / PR-12)', () => {
     expect(screen.getByText(/식비/)).toBeInTheDocument()
     expect(screen.getByText(/2건/)).toBeInTheDocument()
   })
+})
+
+it('opens the exact selected member without changing any transaction', async () => {
+  const user = userEvent.setup()
+  const members = [txn({ memo: '점심' }), txn({ memo: null })]
+  const open = vi.fn()
+  render(
+    <DuplicateSuspectBanner
+      groups={findFuzzyDuplicateGroups(members)}
+      categoryNameById={NAMES}
+      onOpenTransaction={open}
+    />,
+  )
+  await user.click(screen.getByRole('button', { name: '보기' }))
+  await user.click(screen.getByRole('button', { name: /메모 없음 · 거래 열기/ }))
+  expect(open).toHaveBeenCalledExactlyOnceWith(members[1].id)
 })

@@ -7,10 +7,8 @@ import { formatDayHeader } from '../../lib/month'
 /**
  * "의심 중복 N건" over the transactions currently loaded (§5.7).
  *
- * Label only, by design: it names what looks repeated and stops there. There is
- * no delete, no merge, and no bulk action — a false positive here must cost the
- * user a glance, never a row. Opening a listed group's row for review is done
- * the way it always was, by tapping it in the list below.
+ * Opening a member delegates to the existing transaction sheet. This banner
+ * never deletes, merges, or changes rows.
  *
  * The count describes the rows fetched so far, not the whole month: the list is
  * keyset-paginated, so the copy says 불러온 내역 rather than implying a complete scan.
@@ -18,9 +16,11 @@ import { formatDayHeader } from '../../lib/month'
 export function DuplicateSuspectBanner({
   groups,
   categoryNameById,
+  onOpenTransaction,
 }: {
   groups: FuzzyDuplicateGroup[]
   categoryNameById: ReadonlyMap<string, string>
+  onOpenTransaction?: (id: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   if (groups.length === 0) return null
@@ -52,6 +52,22 @@ export function DuplicateSuspectBanner({
               · {categoryNameById.get(g.categoryId) ?? '카테고리'} ·{' '}
               <span className="tnum">{won(g.amount)}</span> · {g.txns.length}건
               {g.sharedMemo ? ` · ${g.sharedMemo}` : ''}
+              {onOpenTransaction && (
+                <ul className="mt-1 flex flex-col gap-1">
+                  {g.txns.map((txn) => (
+                    <li key={txn.id}>
+                      <button
+                        type="button"
+                        onClick={() => onOpenTransaction(txn.id)}
+                        className="pressable min-h-11 w-full rounded-control px-2 py-2 text-left underline underline-offset-2 hover:bg-fill1"
+                      >
+                        {formatDayHeader(txn.txnDate)} · {won(txn.amount)} ·{' '}
+                        {txn.memo?.trim() || '메모 없음'} · 거래 열기
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
           ))}
         </ul>

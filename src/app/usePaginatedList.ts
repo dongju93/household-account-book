@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { type DescribedError, describeError } from '../data/errors'
 
@@ -7,10 +7,7 @@ export interface PaginatedPage<T, C> {
   nextCursor: C | null
 }
 
-/**
- * Keyset-paginated list with the same stale-resolution pattern as useAsyncData.
- * `listKey` should encode every input that resets the first page.
- */
+/** Initial failures replace the list; pagination failures preserve it for retry. */
 export function usePaginatedList<T, C>({
   listKey,
   loadPage,
@@ -19,73 +16,94 @@ export function usePaginatedList<T, C>({
   listKey: string | null
   loadPage: (cursor: C | null) => Promise<PaginatedPage<T, C>>
   beforeLoad?: () => Promise<void>
-}): {
-  rows: T[]
-  loading: boolean
-  loadingMore: boolean
-  error: DescribedError | null
-  hasMore: boolean
-  loadMore: () => Promise<void>
-} {
-  const [syncedKey, setSyncedKey] = useState(listKey)
-  const [fetchedKey, setFetchedKey] = useState<string | null>(null)
-  const [rows, setRows] = useState<T[]>([])
-  const [cursor, setCursor] = useState<C | null>(null)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [error, setError] = useState<DescribedError | null>(null)
-
-  if (syncedKey !== listKey) {
-    setSyncedKey(listKey)
-    setError(null)
-  }
-
-  const loading = listKey !== null && fetchedKey !== listKey
+}) {
+  const [attempt, setAttempt] = useState(0)
+  const [state, setState] = useState<{
+    key: string | null
+    attempt: number
+    rows: T[]
+    cursor: C | null
+    error: DescribedError | null
+    moreError: DescribedError | null
+    loadingMore: boolean
+  } | null>(null)
+  const owner = useRef<{ active: boolean; busy: boolean } | null>(null)
+  const current = state?.key === listKey && state?.attempt === attempt ? state : null
+  const loading = listKey !== null && current === null
 
   // oxlint-disable-next-line react/exhaustive-deps
   useEffect(() => {
-    if (syncedKey === null) return
-    let active = true
-    void (async () => {
-      try {
-        await beforeLoad?.()
-        const page = await loadPage(null)
-        if (!active) return
-        setRows(page.rows)
-        setCursor(page.nextCursor)
-        setError(null)
-        setFetchedKey(syncedKey)
-      } catch (err) {
-        if (active) {
-          setError(describeError(err))
-          setFetchedKey(syncedKey)
+    const task = { active: true, busy: false }
+    owner.current = task
+    if (listKey !== null) {
+      void (async () => {
+        try {
+          await beforeLoad?.()
+          if (!task.active) return
+          const page = await loadPage(null)
+          if (task.active)
+            setState({
+              key: listKey,
+              attempt,
+              rows: page.rows,
+              cursor: page.nextCursor,
+              error: null,
+              moreError: null,
+              loadingMore: false,
+            })
+        } catch (err) {
+          if (task.active)
+            setState({
+              key: listKey,
+              attempt,
+              rows: [],
+              cursor: null,
+              error: describeError(err),
+              moreError: null,
+              loadingMore: false,
+            })
         }
-      }
-    })()
-    return () => {
-      active = false
+      })()
     }
-  }, [syncedKey])
+    return () => {
+      task.active = false
+    }
+  }, [listKey, attempt])
 
   async function loadMore() {
-    if (!cursor || loadingMore) return
-    setLoadingMore(true)
+    const task = owner.current
+    if (!current || current.cursor === null || !task?.active || task.busy) return
+    task.busy = true
+    setState((prev) => prev && { ...prev, loadingMore: true, moreError: null })
     try {
-      const page = await loadPage(cursor)
-      setRows((prev) => [...prev, ...page.rows])
-      setCursor(page.nextCursor)
+      const page = await loadPage(current.cursor)
+      if (task.active)
+        setState(
+          (prev) =>
+            prev && {
+              ...prev,
+              rows: [...prev.rows, ...page.rows],
+              cursor: page.nextCursor,
+              loadingMore: false,
+              moreError: null,
+            },
+        )
     } catch (err) {
-      setError(describeError(err))
+      if (task.active)
+        setState((prev) => prev && { ...prev, loadingMore: false, moreError: describeError(err) })
     } finally {
-      setLoadingMore(false)
+      task.busy = false
     }
   }
 
   return {
-    rows,
+    rows: current?.rows ?? [],
     loading,
-    loadingMore,
-    error,
-    hasMore: cursor !== null,
+    loadingMore: current?.loadingMore ?? false,
+    error: current?.error ?? null,
+    loadMoreError: current?.moreError ?? null,
+    hasMore: current?.cursor != null,
     loadMore,
+    retry: () => setAttempt((value) => value + 1),
   }
 }
