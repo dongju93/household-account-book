@@ -18,6 +18,9 @@ import { callTool } from '../../webmcp/testHelpers'
 import { useMonthCloseTools } from '../../webmcp/useMonthCloseTools'
 
 vi.mock('../../data/categories', () => ({ listCategories: vi.fn() }))
+vi.mock('../../data/categoryMonthTargets', () => ({
+  listCategoryMonthTargets: vi.fn(async () => []),
+}))
 vi.mock('../../data/recurring', () => ({
   listRecurring: vi.fn(),
   listSkippedRecurringIds: vi.fn(),

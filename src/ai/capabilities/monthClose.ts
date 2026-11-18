@@ -25,7 +25,7 @@
  * `useAsyncData` renders its error state). Each adapts at its own edge.
  */
 
-import { listCategories } from '../../data/categories'
+import { loadCategoriesForMonth } from '../../data/monthCategories'
 import { listRecurring, listSkippedRecurringIds } from '../../data/recurring'
 import { fetchTransactionsInRange, materializeMonth } from '../../data/summary'
 import { computeAchievements } from '../../domain/achievement'
@@ -57,12 +57,13 @@ export async function loadMonthCloseReview(
   await materializeMonth(ledgerId, ym)
 
   const range = monthRange(ym.year, ym.month)
-  const [recurringItems, categories, txns, skippedRecurringIds] = await Promise.all([
+  const [recurringItems, monthCategories, txns, skippedRecurringIds] = await Promise.all([
     listRecurring(ledgerId),
-    listCategories(ledgerId),
+    loadCategoriesForMonth(ledgerId, ym),
     fetchTransactionsInRange(ledgerId, range.start, range.endExclusive),
     listSkippedRecurringIds(ledgerId, ym),
   ])
+  const { categories } = monthCategories
 
   // A deliberate skip for `ym` was never supposed to materialize — drop it so
   // `findMissingRecurringOccurrences` can't read it as a materialization bug.

@@ -23,7 +23,7 @@
  * only, and wrapping a tool's output would be the double path §4.9 forbids.
  */
 
-import { listCategories } from '../data/categories'
+import { loadCategoriesForMonth } from '../data/monthCategories'
 import { listRecurring, listSkippedRecurringIds } from '../data/recurring'
 import { fetchTransactionsInRange, materializeMonths } from '../data/summary'
 import { computeAchievements } from '../domain/achievement'
@@ -64,10 +64,11 @@ export async function loadChatSnapshot(
   const { start, endExclusive } = monthWindowRange(currentMonth, months.length)
 
   await materializeMonths(ledgerId, months)
-  const [txns, categories] = await Promise.all([
+  const [txns, monthCategories] = await Promise.all([
     fetchTransactionsInRange(ledgerId, start, endExclusive),
-    listCategories(ledgerId),
+    loadCategoriesForMonth(ledgerId, currentMonth),
   ])
+  const { categories } = monthCategories
 
   if (!options.canEdit) {
     // Must see every materialized occurrence, including later-this-month ones:
